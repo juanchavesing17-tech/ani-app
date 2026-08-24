@@ -352,6 +352,52 @@ function encoger(archivo, lado) {
   });
 }
 
+// ------------------------------------------------- el medidor
+
+/**
+ * Los números de lo que está pasando, con un toque largo en «ANI».
+ *
+ * Existe porque «la voz se entrecorta» se intentó arreglar dos veces a
+ * ciegas: primero la red, luego el trabajo del hilo principal. Los dos eran
+ * problemas reales y ninguno era EL problema, porque desde el computador no
+ * se puede oír este teléfono.
+ *
+ * Con esto Juan lee tres números y se sabe cuál de las tres cosas es:
+ *
+ *   interrupciones altas → el ruido la está cortando (no es la red)
+ *   huecos altos         → la red no da (no es el ruido)
+ *   espera alta          → tarda en contestar (otra cosa distinta)
+ */
+let pulsacion = null;
+
+function contarComoVa() {
+  if (!charla) {
+    $('aviso').textContent = 'Encienda Conversar y hábleme un rato primero.';
+    return;
+  }
+  const c = charla.comoVa();
+  pintar('ani', [
+    '📊 Cómo va esta conversación',
+    '',
+    `Se cortó sola: ${c.interrupciones} vez/veces`,
+    `   (ruido que Gemini tomó por su voz)`,
+    `Huecos de audio: ${c.huecos}`,
+    `   (la red no llegó a tiempo)`,
+    '',
+    `Tardó en abrir: ${c.msHastaAbrir} ms`,
+    `Tardó en contestar: ${c.msHastaLaPrimeraPalabra} ms`,
+  ].join('\n'));
+}
+
+const alEstado = $('estado').parentElement;
+alEstado.addEventListener('touchstart', () => {
+  pulsacion = setTimeout(contarComoVa, 700);
+}, { passive: true });
+['touchend', 'touchmove', 'touchcancel'].forEach((e) =>
+  alEstado.addEventListener(e, () => clearTimeout(pulsacion), { passive: true }));
+// En el computador, con el ratón, vale un doble clic
+alEstado.addEventListener('dblclick', contarComoVa);
+
 // ---------------------------------------------------------- los ajustes
 
 function abrirAjustes() {

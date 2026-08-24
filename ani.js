@@ -60,6 +60,28 @@ export class Conversacion {
     this.posicion = null;
     this.miTurno = '';       // lo que ANI lleva dicho en este turno
     this.suTurno = '';       // lo que Juan lleva dicho
+
+    /**
+     * Lo que pasa de verdad, contado.
+     *
+     * Existe porque llevo dos intentos arreglando «la voz se entrecorta» a
+     * ciegas: primero la red, luego el trabajo del hilo principal. Los dos
+     * eran problemas reales, y ninguno era EL problema.
+     *
+     * Desde el computador no se puede oír el teléfono de Juan. Esto es lo
+     * más cerca: que la app cuente qué le está pasando y él lo lea.
+     *
+     *   interrupciones — Gemini creyó que Juan hablaba y mandó parar. Si
+     *                    esto sube mientras ANI habla sola, el ruido la
+     *                    está cortando y no es la red.
+     *   huecos         — la cola de audio se vació esperando el siguiente
+     *                    trozo. Eso SÍ es la red.
+     */
+    this.cuenta = {
+      interrupciones: 0, huecos: 0, trozos: 0,
+      msHastaAbrir: 0, msHastaLaPrimeraPalabra: 0,
+      _pedido: 0, _finDeTurno: 0,
+    };
   }
 
   async encender() {
@@ -82,6 +104,7 @@ export class Conversacion {
     }
 
     this.avisar('abriendo');
+    this.cuenta._pedido = performance.now();
     let llave;
     try {
       llave = await this.pedirAlServidor('token_de_voz', {});
@@ -150,6 +173,8 @@ export class Conversacion {
     try { m = JSON.parse(texto); } catch (e) { return; }
 
     if (m.setupComplete) {
+      this.cuenta.msHastaAbrir =
+        Math.round(performance.now() - this.cuenta._pedido);
       this.avisar('escuchando');
       return;
     }
@@ -164,6 +189,7 @@ export class Conversacion {
     // Juan interrumpió. Hay que callar YA lo que estaba agendado, o ANI
     // sigue hablando encima de él y no se entiende ninguno de los dos.
     if (sc.interrupted) {
+      this.cuenta.interrupciones++;
       this.altavoz.callar();
       this.avisar('escuchando');
       return;
@@ -182,11 +208,20 @@ export class Conversacion {
     const partes = (sc.modelTurn && sc.modelTurn.parts) || [];
     for (const p of partes) {
       if (p.inlineData && p.inlineData.data) {
+        if (!this.cuenta.trozos && this.cuenta._finDeTurno) {
+          this.cuenta.msHastaLaPrimeraPalabra =
+            Math.round(performance.now() - this.cuenta._finDeTurno);
+        }
+        this.cuenta.trozos++;
         this.altavoz.encolar(bytesDe(p.inlineData.data));
       }
     }
 
     if (sc.turnComplete) {
+      // Se reinicia la cuenta de trozos: la espera se mide por turno, no
+      // acumulada, que es lo que Juan nota.
+      this.cuenta.trozos = 0;
+      this.cuenta._finDeTurno = performance.now();
       if (this.suTurno.trim()) this.decir('juan', this.suTurno.trim());
       if (this.miTurno.trim()) this.decir('ani', this.miTurno.trim());
       this.suTurno = this.miTurno = '';
@@ -248,6 +283,12 @@ export class Conversacion {
     this.ws.send(JSON.stringify({
       toolResponse: { functionResponses: respuestas },
     }));
+  }
+
+  /** Lo medido, para enseñarlo en la pantalla. */
+  comoVa() {
+    return Object.assign({}, this.cuenta,
+                         { huecos: this.altavoz ? this.altavoz.huecos : 0 });
   }
 
   silenciar(callado) {
