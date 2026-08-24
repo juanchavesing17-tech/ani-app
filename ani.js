@@ -117,14 +117,22 @@ export class Conversacion {
     };
   }
 
+  /**
+   * Un trozo de micrófono hacia Gemini.
+   *
+   * Va en `audio`, NO en `mediaChunks`. Ese último está retirado y el
+   * servidor no lo ignora: **cierra la conexión** con un 1007 al primer
+   * trozo. Se veía como que ANI escuchaba un segundo y se cortaba, sin
+   * ningún error a la vista.
+   */
   mandarAudio(arrayBuffer) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     this.ws.send(JSON.stringify({
       realtimeInput: {
-        mediaChunks: [{
+        audio: {
           mimeType: 'audio/pcm;rate=16000',
           data: base64De(arrayBuffer),
-        }],
+        },
       },
     }));
   }
