@@ -326,6 +326,73 @@ async function ponerMusica(p) {
            aviso: 'No pude resolver el vídeo; le abro la lista para que elija.' };
 }
 
+// ------------------------------------------------------------- buscar
+
+/**
+ * Buscar, desde el teléfono, en Wikipedia.
+ *
+ * ## Por qué se mudó aquí, y por qué Wikipedia
+ *
+ * La búsqueda vivía en el servidor y usaba DuckDuckGo. Se midió contra el
+ * Apps Script de verdad y falló **dos de cada tres veces**, colgándose entre
+ * **60 y 155 segundos** antes de rendirse. Y `UrlFetchApp` no admite poner
+ * un tope de espera, así que no hay forma de acotarlo desde allá.
+ *
+ * Dos minutos y medio de silencio en mitad de una conversación hablada no es
+ * «un poco lento»: es que ANI se quedó muerta.
+ *
+ * Wikipedia es lo contrario en las tres cosas que importan:
+ *
+ *   - **Es una API de verdad**, no una página que hay que raspar. Devuelve
+ *     JSON y no cambia de forma cada dos meses.
+ *   - **Permite que la llame un navegador** (manda las cabeceras de CORS),
+ *     así que el teléfono puede ir directo. DuckDuckGo no.
+ *   - **No corta.** Está hecha para que la consulten programas.
+ *
+ * ## Y no se resume: se le entrega crudo al modelo
+ *
+ * Antes se le pedía a Gemini que resumiera lo encontrado — otra llamada, y
+ * otro par de segundos. No hace falta: lo que devuelve una herramienta vuelve
+ * a la conversación, y ANI ya está ahí leyendo. Se le dan los extractos y
+ * ella contesta con ellos.
+ *
+ * ## Lo que Wikipedia NO sirve, dicho claro
+ *
+ * Para lo que cambia cada día: el dólar, el clima, el pico y placa. Pero eso
+ * tiene herramienta propia y va a la fuente oficial. Wikipedia cubre el otro
+ * tipo de pregunta —quién es alguien, qué es algo—, que es la mitad.
+ *
+ * Si no encuentra nada, **lanza**, y entonces `ani.js` lo manda al servidor,
+ * que todavía tiene DuckDuckGo como último recurso.
+ */
+async function buscarEnInternet(p) {
+  const consulta = String(p.consulta || '').trim();
+  if (!consulta) return { error: 'No me dijo qué buscar.' };
+
+  const r = await fetch('https://es.wikipedia.org/w/api.php?action=query'
+    + '&format=json&origin=*&list=search&srlimit=3&srsearch='
+    + encodeURIComponent(consulta));
+  const d = await r.json();
+  const hallado = ((d.query || {}).search) || [];
+
+  // Sin resultados se LANZA a propósito: así `ani.js` lo reintenta contra el
+  // servidor, que tiene otros buscadores. Devolver «no encontré nada» aquí
+  // cerraría la puerta.
+  if (!hallado.length) throw new Error('Wikipedia no tiene nada de esto');
+
+  return {
+    buscador: 'Wikipedia',
+    extractos: hallado.map((x) => ({
+      titulo: x.title,
+      texto: x.snippet.replace(/<[^>]+>/g, '').replace(/&quot;/g, '"')
+                      .replace(/&amp;/g, '&'),
+    })),
+    importante: 'Esto sale de Wikipedia. Contesta SOLO con lo que está aquí, '
+              + 'en dos o tres frases. Si es algo que cambia —un precio, una '
+              + 'noticia— avisa de que puede estar desactualizado.',
+  };
+}
+
 // ------------------------------------------------------------- la puerta
 
 /**
@@ -335,11 +402,12 @@ async function ponerMusica(p) {
  * cosas al servidor no obliga a tocar esto.
  */
 export const AQUI = {
-  calcular:     (p) => calcular(p),
-  hora_y_fecha: () => horaYFecha(),
-  el_clima:     (p, pos) => elClima(p, pos),
-  el_dolar:     () => elDolar(),
-  poner_musica: (p) => ponerMusica(p),
+  calcular:           (p) => calcular(p),
+  hora_y_fecha:       () => horaYFecha(),
+  el_clima:           (p, pos) => elClima(p, pos),
+  el_dolar:           () => elDolar(),
+  poner_musica:       (p) => ponerMusica(p),
+  buscar_en_internet: (p) => buscarEnInternet(p),
 };
 
 export function seHaceAqui(nombre) {
