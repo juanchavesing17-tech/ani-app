@@ -15,6 +15,7 @@ const ROTULO = {
   escuchando: 'Escuchando',
   oyendo: 'Escuchando',
   hablando: 'Hablando',
+  buscando: 'Consultando…',
   'se cayo': 'Se cortó',
   'sin permiso': 'No pude abrir la voz',
   'sin microfono': 'Sin micrófono',
@@ -224,7 +225,7 @@ if (!servidor.estaConfigurada()) {
 } else {
   // Cada vez que Juan abre la app se le cuenta al servidor dónde está, para
   // que el informe de mañana traiga el clima del sitio correcto. Es lo único
-  // que sabe dónde anda: el disparador de las 4:40 corre en Google y desde
+  // que sabe dónde anda: el disparador de las 5:50 corre en Google y desde
   // allá no hay forma de saberlo. Ver `clima.gs`.
   servidor.contarDondeEstoy();
 }

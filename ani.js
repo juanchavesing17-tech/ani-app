@@ -150,6 +150,11 @@ export class Conversacion {
       return;
     }
 
+    // ANI pide una herramienta. La app NO la ejecuta: se la reenvía al Apps
+    // Script, que es quien tiene los permisos y la lista de lo permitido.
+    // El teléfono aquí solo hace de cartero.
+    if (m.toolCall) { this.atenderHerramientas(m.toolCall); return; }
+
     const sc = m.serverContent;
     if (!sc) return;
 
@@ -184,6 +189,38 @@ export class Conversacion {
       this.suTurno = this.miTurno = '';
       this.avisar('escuchando');
     }
+  }
+
+  /**
+   * ANI pidió una o varias herramientas.
+   *
+   * Van todas a la vez, no una tras otra: mientras se espera, la
+   * conversación está parada y Juan oyendo silencio. Dos consultas seguidas
+   * de tres segundos son seis; en paralelo son tres.
+   */
+  async atenderHerramientas(toolCall) {
+    const llamadas = toolCall.functionCalls || [];
+    if (!llamadas.length) return;
+
+    this.avisar('buscando', { que: llamadas.map((l) => l.name).join(', ') });
+
+    const respuestas = await Promise.all(llamadas.map(async (l) => {
+      let salida;
+      try {
+        salida = await this.pedirAlServidor('usar_herramienta',
+                                            { nombre: l.name, argumentos: l.args || {} });
+      } catch (e) {
+        // Se le contesta SIEMPRE, aunque sea con el fallo. Si se deja sin
+        // respuesta, la sesión se queda esperando y ANI enmudece.
+        salida = { error: 'No pude consultarlo: ' + String(e).slice(0, 120) };
+      }
+      return { id: l.id, name: l.name, response: { result: salida } };
+    }));
+
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.ws.send(JSON.stringify({
+      toolResponse: { functionResponses: respuestas },
+    }));
   }
 
   silenciar(callado) {
