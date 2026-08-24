@@ -58,6 +58,8 @@ export class Conversacion {
     // Dónde está el teléfono AHORA, para el clima sin preguntarle al
     // servidor. Lo pone la app al arrancar; si no hay, se usa Pasto.
     this.posicion = null;
+    // Lo que dice Juan mientras la sesion se abre. Ver mandarAudio().
+    this.esperando = [];
     this.miTurno = '';       // lo que ANI lleva dicho en este turno
     this.suTurno = '';       // lo que Juan lleva dicho
 
@@ -79,7 +81,7 @@ export class Conversacion {
      */
     this.cuenta = {
       interrupciones: 0, huecos: 0, trozos: 0,
-      msHastaAbrir: 0, msHastaLaPrimeraPalabra: 0,
+      msHastaAbrir: 0, msHastaLaPrimeraPalabra: 0, msDeVozRescatada: 0,
       _pedido: 0, _finDeTurno: 0,
     };
   }
@@ -153,7 +155,28 @@ export class Conversacion {
    * ningún error a la vista.
    */
   mandarAudio(arrayBuffer) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    // La sesión todavía no está abierta: se GUARDA en vez de tirarlo.
+    //
+    // Esto es lo que hacía que ANI «se demorara en escuchar». Entre que Juan
+    // pulsa Conversar y la sesión queda abierta pasan un par de segundos —el
+    // token al Apps Script, el WebSocket, el setup— y el micrófono ya está
+    // grabando desde el primer instante. Antes, todo lo que dijera en ese
+    // rato se perdía: tenía que repetirlo, y parecía que ANI tardaba en
+    // oírle.
+    //
+    // Ahora se guarda y se suelta de golpe en cuanto la sesión abre.
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      this.esperando.push(arrayBuffer);
+      // Tope de unos 3 segundos. Más atrás no interesa: si abrir tardó tanto,
+      // lo que dijo al principio ya no viene a cuento, y mandarlo entero
+      // sería empezar la conversación con un turno viejo.
+      if (this.esperando.length > 47) this.esperando.shift();
+      return;
+    }
+    this.enviarTrozo(arrayBuffer);
+  }
+
+  enviarTrozo(arrayBuffer) {
     this.ws.send(JSON.stringify({
       realtimeInput: {
         audio: {
@@ -162,6 +185,17 @@ export class Conversacion {
         },
       },
     }));
+  }
+
+  /** Lo que Juan dijo mientras la línea se abría. */
+  soltarLoGuardado() {
+    if (!this.esperando.length) return;
+    this.cuenta.msDeVozRescatada =
+      Math.round(this.esperando.length * 64);
+    for (const trozo of this.esperando) {
+      try { this.enviarTrozo(trozo); } catch (e) { break; }
+    }
+    this.esperando = [];
   }
 
   async recibir(datos) {
@@ -175,6 +209,7 @@ export class Conversacion {
     if (m.setupComplete) {
       this.cuenta.msHastaAbrir =
         Math.round(performance.now() - this.cuenta._pedido);
+      this.soltarLoGuardado();
       this.avisar('escuchando');
       return;
     }

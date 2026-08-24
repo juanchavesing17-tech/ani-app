@@ -368,39 +368,38 @@ function encoger(archivo, lado) {
  *   huecos altos         → la red no da (no es el ruido)
  *   espera alta          → tarda en contestar (otra cosa distinta)
  */
-let pulsacion = null;
-
 function contarComoVa() {
+  const caja = $('comoVa');
+  if (!caja) return;
+
   if (!charla) {
-    $('aviso').textContent = 'Encienda Conversar y hábleme un rato primero.';
+    caja.textContent = 'No hay ninguna conversación abierta.\n\n'
+      + 'Encienda Conversar, hable un rato, y vuelva aquí sin colgar.';
     return;
   }
-  const c = charla.comoVa();
-  pintar('ani', [
-    '📊 Cómo va esta conversación',
-    '',
-    `Se cortó sola: ${c.interrupciones} vez/veces`,
-    `   (ruido que Gemini tomó por su voz)`,
-    `Huecos de audio: ${c.huecos}`,
-    `   (la red no llegó a tiempo)`,
-    '',
-    `Tardó en abrir: ${c.msHastaAbrir} ms`,
-    `Tardó en contestar: ${c.msHastaLaPrimeraPalabra} ms`,
-  ].join('\n'));
-}
 
-const alEstado = $('estado').parentElement;
-alEstado.addEventListener('touchstart', () => {
-  pulsacion = setTimeout(contarComoVa, 700);
-}, { passive: true });
-['touchend', 'touchmove', 'touchcancel'].forEach((e) =>
-  alEstado.addEventListener(e, () => clearTimeout(pulsacion), { passive: true }));
-// En el computador, con el ratón, vale un doble clic
-alEstado.addEventListener('dblclick', contarComoVa);
+  const c = charla.comoVa();
+  caja.textContent = [
+    `Se cortó sola        ${c.interrupciones}`,
+    '   Gemini creyó que usted hablaba encima y la mandó callar.',
+    '   Si esto sube mientras ANI habla sola, es el RUIDO.',
+    '',
+    `Huecos de audio      ${c.huecos}`,
+    '   La cola se quedó sin audio esperando el siguiente trozo.',
+    '   Si esto sube, es la RED.',
+    '',
+    `Tardó en abrir       ${c.msHastaAbrir} ms`,
+    `Tardó en contestar   ${c.msHastaLaPrimeraPalabra} ms`,
+    `Voz rescatada        ${c.msDeVozRescatada} ms`,
+    '   Lo que usted dijo mientras la línea se abría, y que antes',
+    '   se perdía. Si esto sale alto, ahí estaba la demora.',
+  ].join('\n');
+}
 
 // ---------------------------------------------------------- los ajustes
 
 function abrirAjustes() {
+  contarComoVa();
   $('url').value = localStorage.getItem('ani_url') || '';
   $('secreto').value = '';
   $('ajustes').classList.add('abierta');
