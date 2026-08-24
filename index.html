@@ -18,6 +18,18 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;overscroll-behavior:none}
+
+/* El fondo de constelaciones, detrás de todo y sin estorbar al dedo.
+
+   El `width/height:100%` NO sobra aunque haya `inset:0`: un <canvas> es un
+   elemento reemplazado, así que con el tamaño en `auto` se queda en sus
+   300×150 de fábrica en vez de estirarse entre los bordes. Sin esto el fondo
+   sale en un recuadro pequeño arriba a la izquierda. */
+#particulas{
+  position:fixed; inset:0; width:100%; height:100%;
+  z-index:0; pointer-events:none;
+}
+header,#chat,footer,#aviso,#tarjeta{position:relative;z-index:1}
 body{
   background:var(--fondo); color:var(--texto);
   font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -79,6 +91,27 @@ footer{
 }
 #aviso:empty{display:none}
 
+/* ----------------------------------- la tarjeta de confirmar
+   Lo que sale hacia fuera —un correo, una cita— pasa por aquí. Juan lo lee
+   y toca. Se eligió el botón y no la voz a propósito: en obra hay ruido y
+   gente hablando, y un «sí» suelto no puede mandarle un correo a nadie. */
+#tarjeta{
+  margin:12px 16px; padding:14px 16px; border-radius:16px;
+  background:var(--carta); border:1px solid #2c4f74; display:none;
+}
+#tarjeta.abierta{display:block}
+#tarjeta h3{margin:0 0 4px;font-size:14px;color:var(--ani);font-weight:600}
+#tarjeta .cuerpo{
+  font-size:14px; white-space:pre-wrap; overflow-wrap:anywhere;
+  max-height:34vh; overflow-y:auto; margin:8px 0 12px;
+}
+#tarjeta .campo{color:var(--tenue);font-size:12.5px}
+#tarjeta .botones{display:flex;gap:10px}
+#tarjeta .botones button{flex:1}
+#enviar{background:linear-gradient(180deg,#1c7a4a,#125536);border-color:#2a9c61;
+        font-weight:600}
+#cancelar{color:var(--tenue)}
+
 /* ------------------------------------------------- la pantalla de ajustes */
 #ajustes{
   position:fixed; inset:0; background:var(--fondo); z-index:9;
@@ -99,6 +132,8 @@ input{
 </style>
 </head>
 <body>
+
+<canvas id="particulas" aria-hidden="true"></canvas>
 
 <header>
   <svg id="nucleo" viewBox="0 0 100 100" aria-hidden="true">
@@ -123,11 +158,24 @@ input{
 
 <div id="aviso"></div>
 
+<section id="tarjeta">
+  <h3 id="tarjetaTitulo">Esperando su visto bueno</h3>
+  <div class="campo" id="tarjetaCampo"></div>
+  <div class="cuerpo" id="tarjetaCuerpo"></div>
+  <div class="botones">
+    <button id="enviar">Enviar</button>
+    <button id="cancelar">Cancelar</button>
+  </div>
+</section>
+
 <footer>
   <button id="conversar">Conversar</button>
+  <button class="icono" id="btnFoto" title="Enseñarle una foto">📷</button>
   <button class="icono" id="btnSilencio" title="Silenciar el micrófono"
           disabled>🔊</button>
 </footer>
+
+<input type="file" id="camara" accept="image/*" capture="environment" hidden>
 
 <section id="ajustes">
   <h2>Conectar con ANI</h2>

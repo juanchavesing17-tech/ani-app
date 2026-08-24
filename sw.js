@@ -6,9 +6,10 @@
  * contra Gemini y los datos contra el Apps Script—, así que guardarlo sería
  * dejar copias de la agenda de Juan en el teléfono para nada.
  */
-const CAJA = 'ani-armazon-v4';
+const CAJA = 'ani-armazon-v5';
 const ARMAZON = ['./', './index.html', './principal.js', './ani.js',
-                 './microfono.js', './servidor.js', './manifest.json',
+                 './microfono.js', './servidor.js', './particulas.js',
+                 './manifest.json',
                  './icono.svg'];
 
 self.addEventListener('install', (e) => {

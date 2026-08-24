@@ -5,9 +5,11 @@
  */
 
 import { Conversacion } from './ani.js';
+import { FondoParticulas } from './particulas.js';
 import * as servidor from './servidor.js';
 
 const $ = (id) => document.getElementById(id);
+const fondo = new FondoParticulas($('particulas'));
 const ROTULO = {
   dormida: 'En reposo',
   'pidiendo permiso': 'Pidiendo el micrófono…',
@@ -91,10 +93,16 @@ function avisar(que, extra = {}) {
     // está oyendo de verdad, sin tener que mirar letra.
     const r = 15 + Math.min(1, extra.nivel * 2.2) * 11;
     $('pulso').setAttribute('r', r.toFixed(1));
+    fondo.actualizarVoz(extra.nivel);
     return;
   }
 
   $('estado').textContent = ROTULO[que] || que;
+  fondo.cambiarEstado(que);
+
+  // Cuando ANI propone algo que sale hacia fuera, la tarjeta aparece sola:
+  // no hay que acordarse de mirar.
+  if (que === 'escuchando') mirarSiHayPendiente();
 
   if (que === 'oyendo') pintarVivo('juan', extra.texto);
   if (que === 'hablando') pintarVivo('ani', extra.texto);
@@ -175,6 +183,98 @@ function sonar(base64) {
     // Sin gesto del usuario el navegador no deja sonar. Aquí sí lo hay
     // —pulsó el botón—, pero si algún día no, que se sepa por qué.
     $('aviso').textContent = 'Toque otra vez para oírlo.';
+  });
+}
+
+// ------------------------------------------- lo que sale hacia fuera
+
+/**
+ * Enseña lo que ANI dejó propuesto, si hay algo.
+ *
+ * El contenido va **entero y literal**, no resumido: Juan está aprobando un
+ * correo que va a leer otra persona, y enseñarle un resumen sería hacerle
+ * firmar algo que no vio.
+ */
+async function mirarSiHayPendiente() {
+  let p;
+  try { p = await servidor.pedir('ver_pendiente', {}); } catch (e) { return; }
+  if (!p || !p.hay) { $('tarjeta').classList.remove('abierta'); return; }
+
+  const ES = { correo: 'Correo por enviar', evento: 'Cita por crear' };
+  $('tarjetaTitulo').textContent = ES[p.tipo] || 'Esperando su visto bueno';
+
+  const d = p.detalle || {};
+  if (p.tipo === 'correo') {
+    $('tarjetaCampo').textContent = `Para: ${d.para}\nAsunto: ${d.asunto}`;
+    $('tarjetaCuerpo').textContent = d.mensaje || '';
+  } else {
+    $('tarjetaCampo').textContent = p.descripcion;
+    $('tarjetaCuerpo').textContent = (d.lugar ? 'En ' + d.lugar : '');
+  }
+  $('enviar').textContent = p.tipo === 'correo' ? 'Enviar' : 'Crear la cita';
+  $('tarjeta').classList.add('abierta');
+}
+
+async function resolver(si) {
+  $('tarjeta').classList.remove('abierta');
+  try {
+    const r = await servidor.pedir('confirmar_pendiente', { si });
+    pintar('ani', r.mensaje || r.error || (si ? 'Hecho.' : 'No lo mandé.'));
+  } catch (e) {
+    $('aviso').textContent = String(e).replace(/^Error:\s*/, '');
+  }
+}
+
+$('enviar').onclick = () => resolver(true);
+$('cancelar').onclick = () => resolver(false);
+
+// ------------------------------------------------------------- la cámara
+
+$('btnFoto').onclick = () => $('camara').click();
+
+/**
+ * Una foto del plano, de la grieta, de lo que sea.
+ *
+ * Se encoge antes de mandarla: una foto de un celular de hoy son 4 MB, y
+ * subirlos por los datos del teléfono en obra tarda una eternidad. A 1024 px
+ * de lado Gemini lee un plano igual de bien y son unos 150 KB.
+ */
+$('camara').onchange = async (e) => {
+  const archivo = e.target.files[0];
+  if (!archivo) return;
+  e.target.value = '';                    // para poder repetir la misma foto
+
+  $('estado').textContent = 'Mirando la foto…';
+  fondo.cambiarEstado('buscando');
+  try {
+    const base64 = await encoger(archivo, 1024);
+    pintar('juan', '📷 (le enseñé una foto)');
+    const r = await servidor.pedir('usar_herramienta', {
+      nombre: 'mirar_foto',
+      argumentos: { imagen: base64, pregunta: '' },
+    });
+    pintar('ani', r.veo || r.error || 'No pude ver la foto.');
+  } catch (err) {
+    $('aviso').textContent = String(err).replace(/^Error:\s*/, '');
+  }
+  $('estado').textContent = 'En reposo';
+  fondo.cambiarEstado('dormida');
+};
+
+function encoger(archivo, lado) {
+  return new Promise((ok, mal) => {
+    const img = new Image();
+    img.onload = () => {
+      const e = Math.min(1, lado / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * e);
+      c.height = Math.round(img.height * e);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      ok(c.toDataURL('image/jpeg', 0.82).split(',')[1]);
+    };
+    img.onerror = () => mal(new Error('No pude leer la foto.'));
+    img.src = URL.createObjectURL(archivo);
   });
 }
 
