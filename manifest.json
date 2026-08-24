@@ -1,0 +1,14 @@
+{
+  "name": "ANI de campo",
+  "short_name": "ANI",
+  "description": "La asistente de Juan Guillermo Chaves, en el bolsillo.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#030a12",
+  "theme_color": "#030a12",
+  "icons": [
+    { "src": "icono.svg", "sizes": "any", "type": "image/svg+xml",
+      "purpose": "any maskable" }
+  ]
+}
