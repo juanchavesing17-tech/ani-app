@@ -65,6 +65,7 @@ export class FondoParticulas {
       enlace: ESTADOS.dormida.enlace,
     };
     this._t = 0;
+    this._ultimo = 0;
 
     this.quieto = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -176,10 +177,30 @@ export class FondoParticulas {
   /** Un solo fotograma, para cuando el teléfono pide no animar. */
   _unaVez() { this._pintar(); }
 
+  /**
+   * El bucle, limitado a 30 fotogramas por segundo.
+   *
+   * ## Por qué se limita
+   *
+   * Este bucle corre en el mismo hilo que encola el audio de ANI. A 60
+   * fotogramas hace el doble de trabajo —2.400 comparaciones de distancia y
+   * setenta halos por fotograma— y en un teléfono eso le quita tiempo a la
+   * voz. Juan lo oyó: «su voz se oye entrecortada».
+   *
+   * A 30 el fondo se ve igual de fluido —son partículas que derivan
+   * despacio, no un videojuego— y cuesta la mitad.
+   */
   _animar() {
     if (!this.corriendo) return;
     requestAnimationFrame(() => this._animar());
-    this._t += 0.016;
+
+    const ahora = performance.now();
+    if (ahora - this._ultimo < 32) return;
+    // Se avanza el reloj interno con el tiempo REAL, no con un paso fijo:
+    // así la deriva va a la misma velocidad aunque se salten fotogramas.
+    this._t += Math.min(0.1, (ahora - this._ultimo) / 1000);
+    this._ultimo = ahora;
+
     this._interpolar();
     this._mover();
     this._pintar();

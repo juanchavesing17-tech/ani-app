@@ -67,6 +67,15 @@ registerProcessor('remuestreador', Remuestreador);
 export const ENTRADA_HZ = 16000;
 export const SALIDA_HZ = 24000;
 
+/**
+ * Cuánto audio se acumula antes de empezar a sonar.
+ *
+ * 180 ms: bastante para absorber el jitter de una red móvil, poco para que
+ * se note al conversar. Se llegó aquí desde 20 ms, que era lo que hacía que
+ * la voz sonara entrecortada en obra.
+ */
+const COLCHON = 0.18;
+
 export class Microfono {
   constructor(alTrozo, alNivel) {
     this.alTrozo = alTrozo;       // (ArrayBuffer) => void, PCM 16 kHz
@@ -145,6 +154,9 @@ export class Altavoz {
     this.contexto = null;
     this.siguiente = 0;
     this.sonando = [];
+    // Cuántas veces se vació la cola. Es la medida de si el colchón alcanza:
+    // si esto sube mucho en una conversación, hay que agrandarlo.
+    this.huecos = 0;
   }
 
   async preparar() {
@@ -155,7 +167,27 @@ export class Altavoz {
     if (this.contexto.state === 'suspended') await this.contexto.resume();
   }
 
-  /** Un trozo de PCM 16 bits a 24 kHz, tal como llega de Gemini. */
+  /**
+   * Un trozo de PCM 16 bits a 24 kHz, tal como llega de Gemini.
+   *
+   * ## El colchón, que es lo que evita que la voz suene entrecortada
+   *
+   * Los trozos llegan por internet y **no llegan a ritmo constante**: la red
+   * del celular tiene jitter, y sobre todo en obra. Si se empiezan a
+   * reproducir en cuanto llega el primero, el segundo que se retrase deja un
+   * hueco de silencio audible. Y luego el tercero. Eso es exactamente lo que
+   * Juan describió como «su voz se oye entrecortada».
+   *
+   * La primera versión daba **20 milisegundos** de margen. Es nada: cualquier
+   * variación normal de una red móvil se lo come.
+   *
+   * Ahora se espera a tener {@link COLCHON} de audio acumulado antes de
+   * empezar a soltarlo. Ese retraso se paga UNA vez al principio de cada
+   * frase, y a cambio la frase entera sale seguida.
+   *
+   * No se pone más grande porque el retraso sí se nota al conversar: es el
+   * tiempo entre que ANI empieza a generar y Juan la empieza a oír.
+   */
   encolar(arrayBuffer) {
     if (!this.contexto) return;
     const enteros = new Int16Array(arrayBuffer);
@@ -170,9 +202,14 @@ export class Altavoz {
     fuente.connect(this.contexto.destination);
 
     const ahora = this.contexto.currentTime;
-    // Si la cola se vació (llegó tarde el siguiente trozo), se arranca un
-    // pelo por delante del reloj para no cortar la sílaba en curso.
-    if (this.siguiente < ahora) this.siguiente = ahora + 0.02;
+    if (this.siguiente < ahora) {
+      // O es el primer trozo de la frase, o la cola se vació porque un
+      // trozo llegó tarde. En los dos casos se rehace el colchón entero: si
+      // se arrancara pegado al reloj, el siguiente retraso volvería a
+      // cortar, y se entraría en un tartamudeo que ya no para.
+      this.siguiente = ahora + COLCHON;
+      this.huecos++;
+    }
     fuente.start(this.siguiente);
     this.siguiente += buf.duration;
 

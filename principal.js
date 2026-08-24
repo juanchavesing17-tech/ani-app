@@ -40,23 +40,48 @@ const vivas = { juan: null, ani: null };
  * Las barras de voz dentro del núcleo.
  *
  * Es lo único del núcleo que mueve JavaScript: los anillos los gira el CSS,
- * que lo hace la tarjeta gráfica y no cuesta batería. Estas cinco barras sí
- * tienen que seguir lo que se está oyendo.
+ * que lo hace la tarjeta gráfica y no cuesta batería.
+ *
+ * ## Las barras se crean UNA vez y luego solo se estiran
+ *
+ * La primera versión hacía `innerHTML` con las cinco barras en cada aviso de
+ * nivel — **dieciséis veces por segundo**, porque llega uno por cada trozo de
+ * micrófono. Cada `innerHTML` obliga al navegador a parsear el texto y a
+ * rehacer esos nodos, y todo eso pasa en el hilo principal, el mismo que
+ * está encolando el audio de ANI.
+ *
+ * En un computador ni se nota. En un teléfono compite con la voz, y es parte
+ * de por qué sonaba entrecortada. Ahora se tocan cinco atributos y ya.
  */
-function pintarOndas(nivel) {
+const RECTOS = [];
+
+function prepararOndas() {
   const g = $('ondas');
-  if (!g) return;
-  const alto = Math.max(2, Math.min(1, nivel * 3) * 26);
-  let d = '';
+  if (!g || RECTOS.length) return;
   for (let i = 0; i < 5; i++) {
+    const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    r.setAttribute('x', 186 + i * 7);
+    r.setAttribute('width', '3.4');
+    r.setAttribute('rx', '1.7');
+    r.setAttribute('y', '231');
+    r.setAttribute('height', '2');
+    g.appendChild(r);
+    RECTOS.push(r);
+  }
+}
+
+const FORMA = [0.45, 0.8, 1, 0.8, 0.45];
+
+function pintarOndas(nivel) {
+  if (!RECTOS.length) prepararOndas();
+  const alto = Math.max(2, Math.min(1, nivel * 3) * 26);
+  for (let i = 0; i < RECTOS.length; i++) {
     // Las de en medio más altas que las de los lados: así parece una voz y
     // no un ecualizador de cinco palos iguales.
-    const h = Math.max(2, alto * [0.45, 0.8, 1, 0.8, 0.45][i]
-                          * (0.75 + Math.random() * 0.5));
-    d += `<rect x="${186 + i * 7}" y="${232 - h / 2}" width="3.4" `
-       + `height="${h.toFixed(1)}" rx="1.7"/>`;
+    const h = Math.max(2, alto * FORMA[i] * (0.75 + Math.random() * 0.5));
+    RECTOS[i].setAttribute('height', h.toFixed(1));
+    RECTOS[i].setAttribute('y', (232 - h / 2).toFixed(1));
   }
-  g.innerHTML = d;
 }
 
 /** Al primer mensaje el núcleo se aparta para dejar leer. */
@@ -116,14 +141,29 @@ function cerrarBurbuja() {
 
 // ------------------------------------------------------------ el estado
 
+// Cuándo se pintó por última vez el latido del núcleo.
+//
+// Los avisos de nivel llegan 16 veces por segundo, uno por cada trozo de
+// micrófono. Pintar a esa frecuencia no aporta nada —el ojo no lo distingue
+// de 12— y sí le quita tiempo al hilo principal, que es el que encola el
+// audio de ANI. Se limita a ~12 veces por segundo.
+let ultimoLatido = 0;
+
 function avisar(que, extra = {}) {
   if (que === 'nivel') {
+    // El nivel se le pasa SIEMPRE al fondo: guardarlo es una asignación y no
+    // dibuja nada; ya lo lee su propio bucle cuando le toca.
+    fondo.actualizarVoz(extra.nivel);
+
+    const ahora = performance.now();
+    if (ahora - ultimoLatido < 80) return;
+    ultimoLatido = ahora;
+
     // El núcleo late con la voz. Es lo que le dice a Juan que ANI lo está
     // oyendo de verdad, sin tener que mirar letra.
     $('pulso').setAttribute('r',
       (78 + Math.min(1, extra.nivel * 2.2) * 9).toFixed(1));
     pintarOndas(extra.nivel);
-    fondo.actualizarVoz(extra.nivel);
     return;
   }
 
