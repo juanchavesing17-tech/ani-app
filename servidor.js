@@ -68,10 +68,14 @@ export async function pedir(accion, datos = {}) {
 }
 
 /** Dónde está el teléfono, para el clima del informe de mañana. */
+export let ultimaPosicion = null;
+
 export function contarDondeEstoy() {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(
     (pos) => {
+      ultimaPosicion = { lat: pos.coords.latitude,
+                        lon: pos.coords.longitude, nombre: 'donde está' };
       pedir('donde_estoy', {
         lat: pos.coords.latitude,
         lon: pos.coords.longitude,

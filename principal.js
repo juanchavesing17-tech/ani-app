@@ -165,6 +165,9 @@ $('conversar').onclick = async () => {
   }
 
   charla = new Conversacion(servidor.pedir, avisar, asentar);
+  // El GPS del propio teléfono, para que el clima no tenga que ir a
+  // preguntarle al servidor dónde estaba la última vez.
+  charla.posicion = servidor.ultimaPosicion;
   $('conversar').classList.add('viva');
   $('conversar').textContent = 'Terminar';
   $('btnSilencio').disabled = false;

@@ -15,6 +15,7 @@
  */
 
 import { Microfono, Altavoz } from './microfono.js';
+import { AQUI, seHaceAqui } from './aqui_mismo.js';
 
 /**
  * La dirección de la Live API **para tokens efímeros**, que NO es la misma
@@ -54,6 +55,9 @@ export class Conversacion {
     this.mic = null;
     this.altavoz = new Altavoz();
     this.encendida = false;
+    // Dónde está el teléfono AHORA, para el clima sin preguntarle al
+    // servidor. Lo pone la app al arrancar; si no hay, se usa Pasto.
+    this.posicion = null;
     this.miTurno = '';       // lo que ANI lleva dicho en este turno
     this.suTurno = '';       // lo que Juan lleva dicho
   }
@@ -150,9 +154,8 @@ export class Conversacion {
       return;
     }
 
-    // ANI pide una herramienta. La app NO la ejecuta: se la reenvía al Apps
-    // Script, que es quien tiene los permisos y la lista de lo permitido.
-    // El teléfono aquí solo hace de cartero.
+    // ANI pide una herramienta. Unas se hacen aquí mismo y otras van al
+    // Apps Script; lo decide .
     if (m.toolCall) { this.atenderHerramientas(m.toolCall); return; }
 
     const sc = m.serverContent;
@@ -206,14 +209,38 @@ export class Conversacion {
 
     const respuestas = await Promise.all(llamadas.map(async (l) => {
       let salida;
+      const t0 = performance.now();
+      const alServidor = () => this.pedirAlServidor('usar_herramienta',
+        { nombre: l.name, argumentos: l.args || {} });
+
       try {
-        salida = await this.pedirAlServidor('usar_herramienta',
-                                            { nombre: l.name, argumentos: l.args || {} });
+        // Primero se mira si esto se puede hacer aquí mismo. Lo que no
+        // necesita la cuenta de Google de Juan ni una clave secreta no tiene
+        // por qué costar dos segundos de viaje al servidor. Ver
+        // `aqui_mismo.js`: ahí está medido y explicado.
+        if (seHaceAqui(l.name)) {
+          try {
+            salida = await AQUI[l.name](l.args || {}, this.posicion);
+          } catch (fallo) {
+            // El teléfono no alcanzó el servicio: sin datos, mala cobertura,
+            // o una red que lo bloquea. El servidor sale por otra red y a lo
+            // mejor sí llega. No es hipotético: hubo un rato en que
+            // open-meteo no era alcanzable desde una conexión y sí desde los
+            // servidores de Google.
+            console.warn(`${l.name} falló aquí (${fallo}); pruebo el servidor`);
+            salida = await alServidor();
+          }
+        } else {
+          salida = await alServidor();
+        }
       } catch (e) {
         // Se le contesta SIEMPRE, aunque sea con el fallo. Si se deja sin
         // respuesta, la sesión se queda esperando y ANI enmudece.
         salida = { error: 'No pude consultarlo: ' + String(e).slice(0, 120) };
       }
+      const tardo = Math.round(performance.now() - t0);
+      console.log(`${l.name}: ${tardo} ms `
+                  + `(${seHaceAqui(l.name) ? 'aquí' : 'servidor'})`);
       return { id: l.id, name: l.name, response: { result: salida } };
     }));
 
