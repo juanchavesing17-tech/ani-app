@@ -29,7 +29,41 @@ html,body{margin:0;height:100%;overscroll-behavior:none}
   position:fixed; inset:0; width:100%; height:100%;
   z-index:0; pointer-events:none;
 }
-header,#chat,footer,#aviso,#tarjeta{position:relative;z-index:1}
+header,#nucleo,#chat,footer,#aviso,#tarjeta{position:relative;z-index:1}
+
+/* ------------------------------------------------------- el núcleo
+   Es el del panel del computador. En una pantalla de teléfono no puede
+   comerse el sitio de la conversación, así que arranca grande —cuando no
+   hay nada que leer, ES la pantalla— y se encoge al primer mensaje. */
+#nucleo{
+  width:100%; max-width:340px; aspect-ratio:1; margin:0 auto;
+  flex:none; transition:max-width .45s ease, opacity .45s ease;
+}
+#nucleo.chico{max-width:120px;opacity:.55}
+#nucleo text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+             font-weight:600}
+
+@keyframes girar{to{transform:rotate(360deg)}}
+@keyframes girarI{to{transform:rotate(-360deg)}}
+@keyframes fluir{to{stroke-dashoffset:-1000}}
+@keyframes fluirI{to{stroke-dashoffset:1000}}
+@keyframes latido{0%,100%{opacity:.35}50%{opacity:.9}}
+@keyframes brillo{0%,100%{opacity:.25}50%{opacity:.75}}
+.g-lento  {animation:girar  30s linear infinite;transform-origin:200px 200px}
+.g-medio  {animation:girarI 18s linear infinite;transform-origin:200px 200px}
+.g-rapido {animation:girar   7s linear infinite;transform-origin:200px 200px}
+.g-barrido{animation:girar 4.5s linear infinite;transform-origin:200px 200px}
+.fluye  {animation:fluir  3.5s linear infinite}
+.fluye-i{animation:fluirI   5s linear infinite}
+.late   {animation:latido 2.6s ease-in-out infinite}
+.brilla {animation:brillo   3s ease-in-out infinite}
+
+/* Quien pide menos movimiento en Android lo pide por algo. Se queda el
+   núcleo entero, quieto: sigue viéndose ANI, pero no gira nada. */
+@media (prefers-reduced-motion: reduce){
+  .g-lento,.g-medio,.g-rapido,.g-barrido,.fluye,.fluye-i,.late,.brilla{
+    animation:none}
+}
 body{
   background:var(--fondo); color:var(--texto);
   font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -42,7 +76,6 @@ header{
   display:flex; align-items:center; gap:12px;
   padding:14px 18px 10px; border-bottom:1px solid var(--borde);
 }
-#nucleo{width:34px;height:34px;flex:none}
 .titulo{font-weight:600;letter-spacing:.5px}
 #estado{font-size:12.5px;color:var(--tenue);margin-top:-2px}
 header .der{margin-left:auto}
@@ -136,11 +169,6 @@ input{
 <canvas id="particulas" aria-hidden="true"></canvas>
 
 <header>
-  <svg id="nucleo" viewBox="0 0 100 100" aria-hidden="true">
-    <circle cx="50" cy="50" r="30" fill="none" stroke="var(--ani)"
-            stroke-width="4" opacity=".85"/>
-    <circle id="pulso" cx="50" cy="50" r="15" fill="var(--ani)" opacity=".5"/>
-  </svg>
   <div>
     <div class="titulo">ANI</div>
     <div id="estado">En reposo</div>
@@ -148,6 +176,71 @@ input{
   <button class="icono der" id="btnInforme" title="El informe de hoy">☀</button>
   <button class="icono" id="btnAjustes" title="Ajustes">⚙</button>
 </header>
+
+<!-- El núcleo del panel del computador. Los anillos giran con animaciones
+     de CSS, que las mueve la tarjeta gráfica y no cuestan casi nada; el
+     único trabajo de JavaScript son las barras de voz de dentro. -->
+<div id="nucleo">
+  <svg viewBox="0 0 400 400" width="100%" height="100%" aria-hidden="true">
+    <defs>
+      <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="3.4" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <linearGradient id="barrido" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#00e5ff" stop-opacity="0"/>
+        <stop offset="100%" stop-color="#00e5ff" stop-opacity=".4"/>
+      </linearGradient>
+      <radialGradient id="centro">
+        <stop offset="0%" stop-color="#00e5ff" stop-opacity=".18"/>
+        <stop offset="100%" stop-color="#00e5ff" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+
+    <circle cx="200" cy="200" r="120" fill="url(#centro)"/>
+    <g class="g-barrido"><path d="M200 200 L200 42 A158 158 0 0 1 312 88 Z"
+       fill="url(#barrido)"/></g>
+    <g class="g-lento" opacity=".85"><circle cx="200" cy="200" r="186" fill="none"
+       stroke="#0891b2" stroke-width="1" stroke-dasharray="2 6" opacity=".6"/></g>
+    <g class="g-lento"><circle cx="200" cy="200" r="172" fill="none" stroke="#00e5ff"
+       stroke-width="2.5" stroke-dasharray="150 40 70 30 110 50"
+       filter="url(#glow)" class="fluye"/></g>
+    <g class="g-medio">
+      <circle cx="200" cy="200" r="154" fill="none" stroke="#ff9500" stroke-width="8"
+              stroke-dasharray="96 340" stroke-linecap="round" filter="url(#glow)"/>
+      <circle cx="200" cy="200" r="154" fill="none" stroke="#ff9500" stroke-width="2"
+              stroke-dasharray="18 34" opacity=".45" class="fluye-i"/></g>
+    <g class="g-lento" opacity=".9"><g stroke="#7df9ff" stroke-width="1.6">
+      <line x1="200" y1="18" x2="200" y2="32"/><line x1="382" y1="200" x2="368" y2="200"/>
+      <line x1="200" y1="382" x2="200" y2="368"/><line x1="18" y1="200" x2="32" y2="200"/>
+    </g></g>
+    <g class="g-rapido"><circle cx="200" cy="200" r="132" fill="none" stroke="#00e5ff"
+       stroke-width="4.5" stroke-dasharray="230 200" stroke-linecap="round"
+       filter="url(#glow)"/></g>
+    <g class="g-medio" opacity=".75"><circle cx="200" cy="200" r="116" fill="none"
+       stroke="#ffd166" stroke-width="1.4" stroke-dasharray="10 22" class="fluye"/></g>
+    <g class="g-rapido">
+      <circle cx="332" cy="200" r="3.4" fill="#ff9500" filter="url(#glow)"/>
+      <circle cx="68" cy="200" r="2.4" fill="#7df9ff" filter="url(#glow)"/></g>
+
+    <circle id="pulso" class="late" cx="200" cy="200" r="78" fill="none"
+            stroke="#00e5ff" stroke-width="1.5" filter="url(#glow)"/>
+    <circle cx="200" cy="200" r="68" fill="rgba(3,8,15,.85)" stroke="#0f2a44"
+            stroke-width="1.5"/>
+    <circle class="brilla" cx="200" cy="200" r="68" fill="none" stroke="#00e5ff"
+            stroke-width="0.8"/>
+    <g id="ondas" fill="#7df9ff" opacity=".95"></g>
+
+    <text x="200" y="192" text-anchor="middle" fill="#7df9ff" font-size="28"
+          letter-spacing="7" filter="url(#glow)">ANI</text>
+    <text x="200" y="206" text-anchor="middle" fill="#4a6f88" font-size="7"
+          letter-spacing="2.4">ADAPTIVE NEURAL INTERFACE</text>
+    <!-- La firma de quien la hizo, igual que en el computador: discreta y
+         debajo del logo. Se ve si se busca y no estorba a quien solo usa. -->
+    <text x="200" y="219" text-anchor="middle" fill="#2c4658" font-size="5.4"
+          letter-spacing="1.6">POR JUAN GUILLERMO CHAVES · INGEOMAS</text>
+  </svg>
+</div>
 
 <div id="chat">
   <div id="vacio">

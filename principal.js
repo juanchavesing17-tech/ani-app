@@ -36,8 +36,37 @@ const vivas = { juan: null, ani: null };
 
 // ------------------------------------------------------------- el chat
 
+/**
+ * Las barras de voz dentro del núcleo.
+ *
+ * Es lo único del núcleo que mueve JavaScript: los anillos los gira el CSS,
+ * que lo hace la tarjeta gráfica y no cuesta batería. Estas cinco barras sí
+ * tienen que seguir lo que se está oyendo.
+ */
+function pintarOndas(nivel) {
+  const g = $('ondas');
+  if (!g) return;
+  const alto = Math.max(2, Math.min(1, nivel * 3) * 26);
+  let d = '';
+  for (let i = 0; i < 5; i++) {
+    // Las de en medio más altas que las de los lados: así parece una voz y
+    // no un ecualizador de cinco palos iguales.
+    const h = Math.max(2, alto * [0.45, 0.8, 1, 0.8, 0.45][i]
+                          * (0.75 + Math.random() * 0.5));
+    d += `<rect x="${186 + i * 7}" y="${232 - h / 2}" width="3.4" `
+       + `height="${h.toFixed(1)}" rx="1.7"/>`;
+  }
+  g.innerHTML = d;
+}
+
+/** Al primer mensaje el núcleo se aparta para dejar leer. */
+function encogerNucleo() {
+  $('nucleo')?.classList.add('chico');
+}
+
 function pintar(quien, texto, vivo = false) {
   $('vacio')?.remove();
+  encogerNucleo();
   const chat = $('chat');
   const div = document.createElement('div');
   div.className = `dicho ${quien === 'juan' ? 'de-juan' : 'de-ani'}`
@@ -89,10 +118,11 @@ function cerrarBurbuja() {
 
 function avisar(que, extra = {}) {
   if (que === 'nivel') {
-    // El núcleo late con la voz. Es lo único que le dice a Juan que ANI lo
-    // está oyendo de verdad, sin tener que mirar letra.
-    const r = 15 + Math.min(1, extra.nivel * 2.2) * 11;
-    $('pulso').setAttribute('r', r.toFixed(1));
+    // El núcleo late con la voz. Es lo que le dice a Juan que ANI lo está
+    // oyendo de verdad, sin tener que mirar letra.
+    $('pulso').setAttribute('r',
+      (78 + Math.min(1, extra.nivel * 2.2) * 9).toFixed(1));
+    pintarOndas(extra.nivel);
     fondo.actualizarVoz(extra.nivel);
     return;
   }
@@ -113,7 +143,8 @@ function avisar(que, extra = {}) {
     $('conversar').classList.remove('viva');
     $('conversar').textContent = 'Conversar';
     $('btnSilencio').disabled = true;
-    $('pulso').setAttribute('r', 15);
+    $('pulso').setAttribute('r', 78);
+    pintarOndas(0);
     charla = null;
   }
   if (extra.detalle) {
