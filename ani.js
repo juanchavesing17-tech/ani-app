@@ -60,6 +60,8 @@ export class Conversacion {
     this.posicion = null;
     // Lo que dice Juan mientras la sesion se abre. Ver mandarAudio().
     this.esperando = [];
+    // La llave, pedida por adelantado. Ver pedirLlaveConTiempo().
+    this.llavePedida = null;
     this.miTurno = '';       // lo que ANI lleva dicho en este turno
     this.suTurno = '';       // lo que Juan lleva dicho
 
@@ -82,8 +84,32 @@ export class Conversacion {
     this.cuenta = {
       interrupciones: 0, huecos: 0, trozos: 0,
       msHastaAbrir: 0, msHastaLaPrimeraPalabra: 0, msDeVozRescatada: 0,
-      _pedido: 0, _finDeTurno: 0,
+      _pedido: 0, _finDeTurno: 0, _dejoDeHablar: 0,
     };
+  }
+
+  /**
+   * Pide la llave ANTES de que Juan pulse Conversar.
+   *
+   * El medidor dio **2.509 ms** entre pulsar y poder oírle, y casi todo era
+   * esto: la ida y vuelta al Apps Script para pedir el token. Apps Script
+   * arranca en frío en cada petición, y eso no se puede acelerar desde aquí.
+   *
+   * Pero sí se puede hacer antes. Se pide al abrir la app, y cuando Juan
+   * pulsa ya está esperando.
+   *
+   * **El token dura media hora**, así que pedirlo con antelación no lo
+   * estropea. Lo que sí tiene un minuto es el plazo para ABRIR la sesión con
+   * él — por eso esto se vuelve a pedir al cabo de un rato, y por eso no se
+   * pide nada más arrancar, sino cuando la app lleva un momento abierta.
+   */
+  pedirLlaveConTiempo() {
+    if (this.llavePedida) return;
+    this.llavePedida = this.pedirAlServidor('token_de_voz', {})
+      .catch(() => null);
+    // Un token de hace más de 50 segundos ya no sirve para abrir: se tira y
+    // se vuelve a pedir cuando toque.
+    setTimeout(() => { this.llavePedida = null; }, 50000);
   }
 
   async encender() {
@@ -109,7 +135,12 @@ export class Conversacion {
     this.cuenta._pedido = performance.now();
     let llave;
     try {
-      llave = await this.pedirAlServidor('token_de_voz', {});
+      // Si ya se pidió por adelantado, aquí no se espera nada. Ver
+      // `pedirLlaveConTiempo()`: son los 2,5 segundos que midió Juan entre
+      // pulsar Conversar y que ANI pudiera oírle.
+      llave = await (this.llavePedida
+                     || this.pedirAlServidor('token_de_voz', {}));
+      this.llavePedida = null;
       if (llave.error) throw new Error(llave.error);
     } catch (e) {
       await this.apagar();
@@ -231,6 +262,10 @@ export class Conversacion {
     }
 
     if (sc.inputTranscription && sc.inputTranscription.text) {
+      // Cada trozo de transcripcion marca que Juan SIGUE hablando. El
+      // ultimo que llegue es, por tanto, cuando se callo — y es desde ahi
+      // desde donde hay que medir lo que tarda ANI en contestar.
+      this.cuenta._dejoDeHablar = performance.now();
       this.suTurno += sc.inputTranscription.text;
       this.avisar('oyendo', { texto: this.suTurno });
     }
@@ -243,9 +278,9 @@ export class Conversacion {
     const partes = (sc.modelTurn && sc.modelTurn.parts) || [];
     for (const p of partes) {
       if (p.inlineData && p.inlineData.data) {
-        if (!this.cuenta.trozos && this.cuenta._finDeTurno) {
+        if (!this.cuenta.trozos && this.cuenta._dejoDeHablar) {
           this.cuenta.msHastaLaPrimeraPalabra =
-            Math.round(performance.now() - this.cuenta._finDeTurno);
+            Math.round(performance.now() - this.cuenta._dejoDeHablar);
         }
         this.cuenta.trozos++;
         this.altavoz.encolar(bytesDe(p.inlineData.data));

@@ -24,6 +24,8 @@ const ROTULO = {
 };
 
 let charla = null;
+// Una conversacion preparada de antemano, con su llave ya pedida.
+let adelantada = null;
 
 /**
  * La burbuja que está creciendo, UNA POR CADA UNO.
@@ -204,7 +206,8 @@ $('conversar').onclick = async () => {
     return;
   }
 
-  charla = new Conversacion(servidor.pedir, avisar, asentar);
+  charla = adelantada || new Conversacion(servidor.pedir, avisar, asentar);
+  adelantada = null;
   // El GPS del propio teléfono, para que el clima no tenga que ir a
   // preguntarle al servidor dónde estaba la última vez.
   charla.posicion = servidor.ultimaPosicion;
@@ -447,6 +450,10 @@ if (!servidor.estaConfigurada()) {
   // que sabe dónde anda: el disparador de las 5:50 corre en Google y desde
   // allá no hay forma de saberlo. Ver `clima.gs`.
   servidor.contarDondeEstoy();
+  // La llave de voz, pedida ya: al pulsar Conversar no habra que esperar
+  // los 2,5 segundos del viaje al Apps Script.
+  adelantada = new Conversacion(servidor.pedir, avisar, asentar);
+  adelantada.pedirLlaveConTiempo();
 }
 
 // Sin esto, en Android la barra de direcciones al aparecer y desaparecer

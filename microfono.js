@@ -68,13 +68,29 @@ export const ENTRADA_HZ = 16000;
 export const SALIDA_HZ = 24000;
 
 /**
- * Cuánto audio se acumula antes de empezar a sonar.
+ * Cuánto audio se acumula antes de empezar a sonar. **Se ajusta solo.**
  *
- * 180 ms: bastante para absorber el jitter de una red móvil, poco para que
- * se note al conversar. Se llegó aquí desde 20 ms, que era lo que hacía que
- * la voz sonara entrecortada en obra.
+ * ## Por qué no es un número fijo
+ *
+ * Se probaron dos a ojo y los dos se quedaron cortos: 20 ms al principio, y
+ * luego 180. Con 180, el medidor de Juan dio **4 huecos en una conversación**
+ * — cuatro cortes audibles.
+ *
+ * El problema de elegirlo a ojo es que depende de la red de ese momento: en
+ * la oficina con WiFi sobran 100 ms y en obra con 4G flojo no bastan 300. Un
+ * número fijo o se queda corto o mete retraso para nada.
+ *
+ * Así que empieza en {@link COLCHON_MINIMO} y **crece solo cada vez que la
+ * cola se vacía**, hasta {@link COLCHON_MAXIMO}. Se adapta a la red que haya
+ * sin que nadie tenga que tocar nada.
+ *
+ * El precio de un colchón grande es retraso al empezar cada frase. Por eso
+ * hay tope: pasado medio segundo, la conversación se siente lenta y es peor
+ * el remedio.
  */
-const COLCHON = 0.18;
+const COLCHON_MINIMO = 0.2;
+const COLCHON_MAXIMO = 0.6;
+const CRECE = 0.08;
 
 export class Microfono {
   constructor(alTrozo, alNivel) {
@@ -157,6 +173,8 @@ export class Altavoz {
     // Cuántas veces se vació la cola. Es la medida de si el colchón alcanza:
     // si esto sube mucho en una conversación, hay que agrandarlo.
     this.huecos = 0;
+    // Crece solo si la red no da. Ver el comentario de COLCHON_MINIMO.
+    this.colchon = COLCHON_MINIMO;
   }
 
   async preparar() {
@@ -207,7 +225,13 @@ export class Altavoz {
       // trozo llegó tarde. En los dos casos se rehace el colchón entero: si
       // se arrancara pegado al reloj, el siguiente retraso volvería a
       // cortar, y se entraría en un tartamudeo que ya no para.
-      this.siguiente = ahora + COLCHON;
+      //
+      // Y si esto ya había pasado antes en esta sesión, el colchón crece:
+      // la red de hoy necesita más de lo que se le estaba dando.
+      if (this.huecos) {
+        this.colchon = Math.min(COLCHON_MAXIMO, this.colchon + CRECE);
+      }
+      this.siguiente = ahora + this.colchon;
       this.huecos++;
     }
     fuente.start(this.siguiente);
