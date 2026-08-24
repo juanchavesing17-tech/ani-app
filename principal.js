@@ -21,7 +21,15 @@ const ROTULO = {
 };
 
 let charla = null;
-let burbujaViva = null;
+
+/**
+ * La burbuja que está creciendo, UNA POR CADA UNO.
+ *
+ * Antes había una sola variable para las dos, y al empezar a hablar ANI la
+ * de Juan se quedaba huérfana en pantalla: su frase aparecía dos veces, la
+ * de en vivo en cursiva y la definitiva debajo. Lo vio él en el celular.
+ */
+const vivas = { juan: null, ani: null };
 
 // ------------------------------------------------------------- el chat
 
@@ -43,17 +51,35 @@ function pintar(quien, texto, vivo = false) {
  * chat se llena de fragmentos sueltos.
  */
 function pintarVivo(quien, texto) {
-  if (burbujaViva && burbujaViva.dataset.quien === quien) {
-    burbujaViva.textContent = texto;
+  if (vivas[quien]) {
+    vivas[quien].textContent = texto;
     $('chat').scrollTop = $('chat').scrollHeight;
     return;
   }
-  burbujaViva = pintar(quien, texto, true);
-  burbujaViva.dataset.quien = quien;
+  vivas[quien] = pintar(quien, texto, true);
 }
 
+/**
+ * Se acabó el turno: la burbuja que estaba creciendo se queda con el texto
+ * definitivo y deja de verse en cursiva. **No se pinta otra** — pintar una
+ * nueva encima era lo que duplicaba las frases.
+ */
+function asentar(quien, texto) {
+  if (vivas[quien]) {
+    vivas[quien].textContent = texto;
+    vivas[quien].classList.remove('vivo');
+    vivas[quien] = null;
+  } else {
+    pintar(quien, texto);
+  }
+}
+
+/** Lo que quedara a medias, se deja quieto en pantalla en vez de borrarlo. */
 function cerrarBurbuja() {
-  if (burbujaViva) { burbujaViva.remove(); burbujaViva = null; }
+  for (const quien of ['juan', 'ani']) {
+    if (vivas[quien]) { vivas[quien].classList.remove('vivo');
+                        vivas[quien] = null; }
+  }
 }
 
 // ------------------------------------------------------------ el estado
@@ -98,9 +124,7 @@ $('conversar').onclick = async () => {
     return;
   }
 
-  charla = new Conversacion(servidor.pedir, avisar,
-                            (quien, texto) => { cerrarBurbuja();
-                                                pintar(quien, texto); });
+  charla = new Conversacion(servidor.pedir, avisar, asentar);
   $('conversar').classList.add('viva');
   $('conversar').textContent = 'Terminar';
   $('btnSilencio').disabled = false;
