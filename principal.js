@@ -693,10 +693,50 @@ if (!servidor.estaConfigurada()) {
   adelantada.pedirLlaveConTiempo();
   subirApuntesAtrasados(true);   // al arrancar sí se anuncia
 
-  // Abierta por el despertador: `…/?despertar`. Lo único que tiene que hacer
-  // el teléfono a las siete es abrir esta dirección; el resto es cosa de
-  // `despertar()`.
-  if (/[?&]despertar\b/.test(location.search)) despertar();
+  // Abierta por el despertador: `…/?despertar`, o simplemente abierta a la
+  // hora de despertarse. Ver `esHoraDeDespertar`.
+  if (/[?&]despertar\b/.test(location.search) || esHoraDeDespertar()) {
+    despertar();
+  }
+}
+
+/**
+ * Cuándo dar el informe sin que nadie lo pida.
+ *
+ * ## Por qué existe esto
+ *
+ * Lo limpio es que el despertador abra `…/?despertar`. Pero eso obliga a que
+ * el programador del teléfono sepa abrir una DIRECCIÓN, y no todos pueden:
+ * MacroDroid gratis no le da a Juan todas las acciones, y las rutinas que
+ * trae Android abren *aplicaciones*, no enlaces.
+ *
+ * Así que se le quita el requisito: **si la app se abre a la hora de
+ * levantarse un día laboral, y hoy no ha dado el informe, lo da.** Con eso
+ * sirve cualquier cosa que abra la app — una rutina de Android, un acceso
+ * directo, o el propio Juan tocando el icono.
+ *
+ * ## La ventana es estrecha a propósito
+ *
+ * Una hora, de 6:40 a 7:40. Fuera de ahí no pasa nada, porque si él abre ANI
+ * a las diez para apuntar algo no quiere que le lea el clima. Y una sola vez
+ * al día: si la abre dos veces seguidas, la segunda no repite.
+ *
+ * El día de la semana lo mira aquí por encima, pero **quien decide de verdad
+ * es `despertar()`**, que le pregunta al servidor — y el servidor sabe de
+ * festivos. Esto solo evita hacer la pregunta un domingo.
+ */
+function esHoraDeDespertar() {
+  const ahora = new Date();
+  const dia = ahora.getDay();
+  if (dia === 0 || dia === 6) return false;
+
+  const minutos = ahora.getHours() * 60 + ahora.getMinutes();
+  if (minutos < 6 * 60 + 40 || minutos > 7 * 60 + 40) return false;
+
+  const hoy = ahora.toISOString().slice(0, 10);
+  if (localStorage.getItem('ani_ya_desperto') === hoy) return false;
+  try { localStorage.setItem('ani_ya_desperto', hoy); } catch (e) { /* da igual */ }
+  return true;
 }
 
 /**
