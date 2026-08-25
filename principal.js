@@ -281,26 +281,84 @@ $('btnSilencio').onclick = () => {
  */
 $('btnInforme').onclick = () => darElInforme();
 
-async function darElInforme() {
+/**
+ * @param {boolean} despertando  si esto tiene que SONAR sí o sí
+ *
+ * La diferencia importa. Con el botón ☀, Juan está despierto y mirando: si no
+ * hay audio, leer el texto basta. **Despertándolo no**: un texto en una
+ * pantalla que nadie mira es exactamente igual que no hacer nada, y él sigue
+ * dormido creyendo que ANI iba a sonar.
+ */
+async function darElInforme(despertando = false) {
   $('aviso').textContent = '';
   if (!servidor.estaConfigurada()) { abrirAjustes(); return; }
 
   $('estado').textContent = 'Trayendo el informe…';
   try {
     const r = await servidor.pedir('hablado_de_hoy', {});
-    if (!r.hay || !r.fresco) {
-      // Antes que decir algo desactualizado, se pide el de ahora mismo.
-      const ahora = await servidor.pedir('despertador', { con_voz: false });
-      pintar('ani', ahora.texto || r.motivo || 'No pude traer el informe.');
+
+    if (r.hay && r.fresco && r.audio) {
+      pintar('ani', r.texto);
+      sonar(r.audio);
       $('estado').textContent = 'En reposo';
       return;
     }
-    pintar('ani', r.texto);
-    if (r.audio) sonar(r.audio);
+
+    // El buzón está vacío o trae el de ayer. Antes que decir algo
+    // desactualizado, se pide el de ahora mismo — y **con voz si esto es un
+    // despertador**, aunque fabricarla cueste unos segundos. A las siete de
+    // la mañana esos segundos no importan; que suene, sí.
+    const ahora = await servidor.pedir('despertador', { con_voz: despertando });
+    pintar('ani', ahora.texto || r.motivo || 'No pude traer el informe.');
+    if (ahora.audio) sonar(ahora.audio);
+    else if (despertando) leerEnVozAlta(ahora.texto || r.motivo);
+
   } catch (e) {
     $('aviso').textContent = String(e).replace(/^Error:\s*/, '');
+    // Ni con eso. Se le dice algo, con la voz que sea, antes que dejarlo
+    // dormido en silencio.
+    if (despertando) {
+      leerEnVozAlta('Buenos días, jefe. No pude traer el informe de hoy, '
+                  + 'pero es hora de levantarse.');
+    }
   }
   $('estado').textContent = 'En reposo';
+}
+
+/**
+ * La última red: la voz del propio teléfono.
+ *
+ * No es la de ANI y suena a robot, pero **funciona sin internet y sin Gemini**
+ * — va incluida en Android. Es lo que separa «lo despertó con una voz fea» de
+ * «no lo despertó», y esa diferencia vale más que la calidad del audio.
+ */
+function leerEnVozAlta(texto) {
+  if (!texto || !window.speechSynthesis) return;
+
+  const decir = () => {
+    try {
+      const d = new SpeechSynthesisUtterance(texto);
+      d.lang = 'es-CO';
+      d.rate = 0.95;
+      speechSynthesis.speak(d);
+    } catch (e) { /* si tampoco se puede, queda la vibración */ }
+  };
+
+  // Las voces del sistema cargan de forma ASÍNCRONA, y si se habla antes de
+  // que estén, el navegador se traga la frase sin decir nada.
+  //
+  // Da la casualidad de que ese es justo el caso que importa: a las siete la
+  // app se abre en frío y habla enseguida. En las pruebas de aquí las voces
+  // ya estaban cargadas, así que **este fallo no lo pude reproducir** — pero
+  // esperar cuesta cinco líneas y quedarse mudo cuesta el despertador.
+  if (speechSynthesis.getVoices().length) { decir(); return; }
+
+  let dicho = false;
+  const unaVez = () => { if (!dicho) { dicho = true; decir(); } };
+  speechSynthesis.addEventListener('voiceschanged', unaVez, { once: true });
+  // Y por si ese aviso no llega nunca: se intenta igual. Hablar sin voces
+  // cargadas puede fallar; no intentarlo falla seguro.
+  setTimeout(unaVez, 1200);
 }
 
 function sonar(base64) {
@@ -368,7 +426,8 @@ async function despertar() {
     console.warn('no pude comprobar si hoy es festivo: ' + e);
   }
 
-  await darElInforme();
+  // `true`: esto tiene que sonar sí o sí. Ver `darElInforme`.
+  await darElInforme(true);
 }
 
 // ------------------------------------------- lo que sale hacia fuera
