@@ -6,7 +6,7 @@
  * contra Gemini y los datos contra el Apps Script—, así que guardarlo sería
  * dejar copias de la agenda de Juan en el teléfono para nada.
  */
-const CAJA = 'ani-armazon-v15';
+const CAJA = 'ani-armazon-v16';
 const ARMAZON = ['./', './index.html', './principal.js', './ani.js',
                  './microfono.js', './servidor.js', './particulas.js',
                  './aqui_mismo.js', './bitacora_local.js',
@@ -31,5 +31,11 @@ self.addEventListener('fetch', (e) => {
   // del informe eso es decirle a Juan el clima de ayer.
   if (e.request.method !== 'GET') return;
   if (new URL(e.request.url).origin !== self.location.origin) return;
-  e.respondWith(caches.match(e.request).then((r) => r || fetch(e.request)));
+  // `ignoreSearch` porque el despertador abre la app como `…/?despertar`, y
+  // sin eso la caché busca esa dirección EXACTA —con el «?» incluido—, no la
+  // encuentra, y la app solo abriría habiendo señal. Justo a las siete de la
+  // mañana, que es cuando tiene que abrir sí o sí.
+  e.respondWith(
+    caches.match(e.request, { ignoreSearch: true })
+          .then((r) => r || fetch(e.request)));
 });

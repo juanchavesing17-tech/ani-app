@@ -275,7 +275,9 @@ $('btnSilencio').onclick = () => {
  * Se pide el que ya está hecho en vez de generarlo: así suena la voz buena
  * —la que grabó GitHub con la Live API— en vez de la de texto a voz.
  */
-$('btnInforme').onclick = async () => {
+$('btnInforme').onclick = () => darElInforme();
+
+async function darElInforme() {
   $('aviso').textContent = '';
   if (!servidor.estaConfigurada()) { abrirAjustes(); return; }
 
@@ -295,17 +297,74 @@ $('btnInforme').onclick = async () => {
     $('aviso').textContent = String(e).replace(/^Error:\s*/, '');
   }
   $('estado').textContent = 'En reposo';
-};
+}
 
 function sonar(base64) {
   const audio = new Audio('data:audio/wav;base64,' + base64);
   $('estado').textContent = 'Hablando';
   audio.onended = () => { $('estado').textContent = 'En reposo'; };
   audio.play().catch(() => {
-    // Sin gesto del usuario el navegador no deja sonar. Aquí sí lo hay
-    // —pulsó el botón—, pero si algún día no, que se sepa por qué.
-    $('aviso').textContent = 'Toque otra vez para oírlo.';
+    // Sin gesto del usuario el navegador no deja sonar. Desde el botón sí lo
+    // hay; al despertar puede que no, y para eso está `pedirQueLoToque`.
+    $('estado').textContent = 'En reposo';
+    pedirQueLoToque(audio);
   });
+}
+
+/**
+ * Cuando el navegador no deja sonar sin que nadie haya tocado la pantalla.
+ *
+ * Pasa al abrir la app desde el despertador. Callarse sería lo peor: Juan
+ * seguiría dormido creyendo que ANI iba a hablar. Así que se pone un botón
+ * grande, se vibra —que sí está permitido— y con un toque suena.
+ */
+function pedirQueLoToque(audio) {
+  const div = pintar('ani', '▶  Toque aquí para oír el informe');
+  div.classList.add('enlace');
+  div.onclick = () => {
+    audio.play().catch(() => {});
+    div.remove();
+  };
+  if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]);
+}
+
+/**
+ * Despertar: la app abierta sola a las siete de la mañana.
+ *
+ * ## Por qué esto vive aquí y no en una app de automatización
+ *
+ * Montar el despertador en Automate eran once bloques en un lienzo de nodos,
+ * y Juan lo dijo claro: «la app es bastante confusa». Todo lo que se pueda
+ * hacer aquí es un bloque menos que él tenga que armar y entender.
+ *
+ * Así, en el teléfono solo queda «a las siete, abre esta dirección». Lo demás
+ * —mirar si hoy es festivo, traer el informe, sonar— lo hace este código, que
+ * es donde se puede probar y arreglar.
+ *
+ * ## El festivo se comprueba AQUÍ
+ *
+ * Un horario sabe qué día de la semana es, pero no sabe que el 20 de julio no
+ * se trabaja. Se le pregunta al servidor, que sí lo sabe. Ver `festivos.gs`.
+ */
+async function despertar() {
+  document.title = 'ANI · buenos días';
+  $('estado').textContent = 'Buenos días…';
+
+  try {
+    const dia = await servidor.pedir('es_dia_laboral', {});
+    if (dia && dia.suena === 'no') {
+      // Hoy no. Ni un sonido: la gracia de que no suene es que no suene.
+      pintar('ani', dia.motivo || 'Hoy no hay que madrugar, jefe.');
+      $('estado').textContent = 'En reposo';
+      return;
+    }
+  } catch (e) {
+    // Sin respuesta no se sabe si hoy es festivo. Se sigue: despertarlo un
+    // festivo es un fastidio; no despertarlo un día de obra le cuesta caro.
+    console.warn('no pude comprobar si hoy es festivo: ' + e);
+  }
+
+  await darElInforme();
 }
 
 // ------------------------------------------- lo que sale hacia fuera
@@ -562,6 +621,11 @@ if (!servidor.estaConfigurada()) {
   adelantada = new Conversacion(servidor.pedir, avisar, asentar);
   adelantada.pedirLlaveConTiempo();
   subirApuntesAtrasados();
+
+  // Abierta por el despertador: `…/?despertar`. Lo único que tiene que hacer
+  // el teléfono a las siete es abrir esta dirección; el resto es cosa de
+  // `despertar()`.
+  if (/[?&]despertar\b/.test(location.search)) despertar();
 }
 
 /**
