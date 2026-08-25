@@ -104,12 +104,25 @@ export class Conversacion {
    * pide nada más arrancar, sino cuando la app lleva un momento abierta.
    */
   pedirLlaveConTiempo() {
-    if (this.llavePedida) return;
+    if (this.encendida) return;          // ya está hablando: no hace falta
     this.llavePedida = this.pedirAlServidor('token_de_voz', {})
       .catch(() => null);
-    // Un token de hace más de 50 segundos ya no sirve para abrir: se tira y
-    // se vuelve a pedir cuando toque.
-    setTimeout(() => { this.llavePedida = null; }, 50000);
+
+    // Un token de hace casi un minuto ya no sirve para ABRIR. La primera
+    // versión lo tiraba y no pedía otro, así que quien dejara la app abierta
+    // un rato pagaba los 2,5 segundos completos — que es justo lo que midió
+    // Juan: 519 ms cuando la llave estaba fresca, 2.565 cuando ya no.
+    //
+    // Así que en vez de tirarla, se renueva.
+    clearTimeout(this.relevo);
+    this.relevo = setTimeout(() => this.pedirLlaveConTiempo(), 45000);
+  }
+
+  /** Al colgar, que deje de pedir llaves para una conversación que no hay. */
+  dejarDePedirLlaves() {
+    clearTimeout(this.relevo);
+    this.relevo = null;
+    this.llavePedida = null;
   }
 
   async encender() {
@@ -140,7 +153,7 @@ export class Conversacion {
       // pulsar Conversar y que ANI pudiera oírle.
       llave = await (this.llavePedida
                      || this.pedirAlServidor('token_de_voz', {}));
-      this.llavePedida = null;
+      this.dejarDePedirLlaves();
       if (llave.error) throw new Error(llave.error);
     } catch (e) {
       await this.apagar();
@@ -292,6 +305,10 @@ export class Conversacion {
       // acumulada, que es lo que Juan nota.
       this.cuenta.trozos = 0;
       this.cuenta._finDeTurno = performance.now();
+      // Lo que llegue a partir de aquí es una frase NUEVA. Sin este aviso,
+      // el altavoz no puede distinguir «empieza a hablar» de «se quedó sin
+      // audio a mitad», y cuenta un corte en cada turno. Ver `microfono.js`.
+      this.altavoz.nuevaFrase();
       if (this.suTurno.trim()) this.decir('juan', this.suTurno.trim());
       if (this.miTurno.trim()) this.decir('ani', this.miTurno.trim());
       this.suTurno = this.miTurno = '';
@@ -346,6 +363,18 @@ export class Conversacion {
       const tardo = Math.round(performance.now() - t0);
       console.log(`${l.name}: ${tardo} ms `
                   + `(${seHaceAqui(l.name) ? 'aquí' : 'servidor'})`);
+
+      // Una herramienta puede pedir que la app HAGA algo, no solo que
+      // conteste. Y hasta ahora no se hacía: `poner_musica` resolvía el vídeo
+      // de YouTube, devolvía el enlace, ANI decía «ya la puse»… y no pasaba
+      // nada, porque en toda la app no había una línea que abriera una URL.
+      // Que ANI diga que hizo algo que no hizo es lo peor que puede pasar.
+      if (salida && salida.url) this.avisar('abrir', { url: salida.url });
+      // Y solo se pregunta por propuestas pendientes si acaba de haber una.
+      // Antes se preguntaba al final de CADA turno: un viaje al Apps Script
+      // —dos segundos— que el 95% de las veces no traía nada.
+      if (salida && salida.propuesto) this.avisar('hay propuesta');
+
       return { id: l.id, name: l.name, response: { result: salida } };
     }));
 

@@ -91,6 +91,20 @@ function encogerNucleo() {
   $('nucleo')?.classList.add('chico');
 }
 
+/**
+ * Cuántas burbujas se guardan en pantalla.
+ *
+ * Juan lo describió como que «se llena la interfaz de mensajes y no da
+ * espacio para más». Cada turno deja dos, y no se quitaba ninguna: en una
+ * conversación larga son cientos de elementos que el navegador vuelve a medir
+ * en cada cuadro — y ese trabajo se lo quita al hilo que encola el audio de
+ * ANI. O sea que la conversación larga se pagaba en voz entrecortada.
+ *
+ * Cuarenta es de sobra para subir a mirar lo que se dijo. Lo que importa de
+ * verdad queda apuntado en la bitácora, no en el chat.
+ */
+const BURBUJAS_EN_PANTALLA = 40;
+
 function pintar(quien, texto, vivo = false) {
   $('vacio')?.remove();
   encogerNucleo();
@@ -100,8 +114,32 @@ function pintar(quien, texto, vivo = false) {
                 + (vivo ? ' vivo' : '');
   div.textContent = texto;
   chat.appendChild(div);
+
+  while (chat.children.length > BURBUJAS_EN_PANTALLA) {
+    chat.removeChild(chat.firstElementChild);
+  }
+
   chat.scrollTop = chat.scrollHeight;
   return div;
+}
+
+/**
+ * Abrir algo fuera de la app: un vídeo, un mapa, la hoja de la bitácora.
+ *
+ * Con `noopener` a propósito: sin eso, la página que se abre puede tocar la
+ * nuestra desde `window.opener`, y la nuestra tiene el secreto guardado.
+ */
+function abrirFuera(url) {
+  if (!url) return;
+  const abierta = window.open(url, '_blank', 'noopener');
+  // Android bloquea la ventana si no viene de un toque suyo, y esto viene de
+  // que ANI usó una herramienta. Se le deja el enlace a mano en vez de
+  // dejarle creer que sonó algo que no sonó.
+  if (!abierta) {
+    const div = pintar('ani', 'Toque aquí para abrirlo');
+    div.classList.add('enlace');
+    div.onclick = () => window.open(url, '_blank', 'noopener');
+  }
 }
 
 /**
@@ -169,12 +207,18 @@ function avisar(que, extra = {}) {
     return;
   }
 
+  // Una herramienta pidió abrir algo — YouTube, casi siempre. Se hace aquí y
+  // no dentro de `ani.js` porque abrir ventanas es cosa de la interfaz.
+  if (que === 'abrir') { abrirFuera(extra.url); return; }
+
+  // Cuando ANI propone algo que sale hacia fuera, la tarjeta aparece sola.
+  // Solo se pregunta cuando acaba de proponerse algo: preguntarlo al final de
+  // cada turno costaba un viaje al Apps Script —dos segundos— que casi nunca
+  // traía nada.
+  if (que === 'hay propuesta') { mirarSiHayPendiente(); return; }
+
   $('estado').textContent = ROTULO[que] || que;
   fondo.cambiarEstado(que);
-
-  // Cuando ANI propone algo que sale hacia fuera, la tarjeta aparece sola:
-  // no hay que acordarse de mirar.
-  if (que === 'escuchando') mirarSiHayPendiente();
 
   if (que === 'oyendo') pintarVivo('juan', extra.texto);
   if (que === 'hablando') pintarVivo('ani', extra.texto);
@@ -405,10 +449,25 @@ function abrirAjustes() {
   contarComoVa();
   $('url').value = localStorage.getItem('ani_url') || '';
   $('secreto').value = '';
+  // Sin configurar no hay a dónde volver: la pantalla principal no haría
+  // nada. El botón aparece cuando ya hay acceso guardado.
+  $('volver').style.display = servidor.estaConfigurada() ? 'flex' : 'none';
   $('ajustes').classList.add('abierta');
 }
 
 $('btnAjustes').onclick = abrirAjustes;
+
+/**
+ * Volver. Solo si ANI ya está configurada: si no lo está, no hay ningún
+ * sitio al que volver —la pantalla principal no serviría de nada— y el botón
+ * se esconde.
+ */
+function cerrarAjustes() {
+  if (!servidor.estaConfigurada()) return;
+  $('ajustes').classList.remove('abierta');
+  $('aviso').textContent = '';
+}
+$('volver').onclick = cerrarAjustes;
 
 $('guardar').onclick = async () => {
   const url = $('url').value.trim();

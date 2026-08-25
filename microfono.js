@@ -80,17 +80,33 @@ export const SALIDA_HZ = 24000;
  * la oficina con WiFi sobran 100 ms y en obra con 4G flojo no bastan 300. Un
  * número fijo o se queda corto o mete retraso para nada.
  *
- * Así que empieza en {@link COLCHON_MINIMO} y **crece solo cada vez que la
- * cola se vacía**, hasta {@link COLCHON_MAXIMO}. Se adapta a la red que haya
- * sin que nadie tenga que tocar nada.
+ * ## Y por qué crece Y ENCOGE
+ *
+ * La primera versión solo crecía, y salió mal: el medidor de Juan pasó de 4
+ * huecos a 16, y ANI se volvía más lenta cuanto más se hablaba con ella. La
+ * causa no era la red — era que **lo que se contaba como hueco no lo era**.
+ * Ver {@link Altavoz#encolar}.
+ *
+ * Arreglada la cuenta, hacía falta lo otro: que un mal rato de red no deje el
+ * colchón inflado el resto de la conversación. Sube {@link CRECE} con cada
+ * corte de verdad y baja {@link ENCOGE} por cada frase que salga limpia.
  *
  * El precio de un colchón grande es retraso al empezar cada frase. Por eso
- * hay tope: pasado medio segundo, la conversación se siente lenta y es peor
- * el remedio.
+ * hay tope: pasado medio segundo la conversación se siente lenta, y es peor
+ * el remedio que la enfermedad.
  */
 const COLCHON_MINIMO = 0.2;
 const COLCHON_MAXIMO = 0.6;
 const CRECE = 0.08;
+const ENCOGE = 0.02;
+
+/**
+ * Si el trozo anterior llegó hace más de esto, el silencio **no es culpa de
+ * la red**: es que ANI se calló a propósito —fue a usar una herramienta, o
+ * terminó de hablar—. Sin esta comprobación, cada pausa normal contaría como
+ * corte y el colchón crecería por nada.
+ */
+const SILENCIO_QUE_NO_ES_HUECO = 1.0;
 
 export class Microfono {
   constructor(alTrozo, alNivel) {
@@ -168,13 +184,36 @@ function nivelDe(muestras) {
 export class Altavoz {
   constructor() {
     this.contexto = null;
+    // 0 quiere decir «no hay ninguna frase sonando ahora mismo». Es lo que
+    // distingue empezar a hablar de quedarse sin audio a mitad.
     this.siguiente = 0;
     this.sonando = [];
-    // Cuántas veces se vació la cola. Es la medida de si el colchón alcanza:
-    // si esto sube mucho en una conversación, hay que agrandarlo.
+    // Cortes de VERDAD: la cola se vació mientras ANI seguía hablando. Es la
+    // medida de si el colchón alcanza. Ver `encolar`.
     this.huecos = 0;
-    // Crece solo si la red no da. Ver el comentario de COLCHON_MINIMO.
+    // Se ajusta solo, arriba y abajo. Ver el comentario de COLCHON_MINIMO.
     this.colchon = COLCHON_MINIMO;
+    this.ultimoTrozo = 0;
+    this.huboCorteEnEsta = false;
+  }
+
+  /**
+   * ANI empieza otra frase. Lo llama `ani.js` al cerrarse cada turno.
+   *
+   * Hace falta que alguien lo diga desde fuera: desde aquí dentro, «la cola
+   * está vacía porque acabó la frase» y «la cola está vacía porque un trozo
+   * viene tarde» **se ven exactamente igual**, y confundirlas fue justo el
+   * fallo que hizo que ANI se frenara sola.
+   */
+  nuevaFrase() {
+    // La frase anterior salió entera: la red va bien y se puede devolver
+    // parte del retraso. Sin esto, un mal rato deja el colchón inflado el
+    // resto de la conversación.
+    if (!this.huboCorteEnEsta) {
+      this.colchon = Math.max(COLCHON_MINIMO, this.colchon - ENCOGE);
+    }
+    this.huboCorteEnEsta = false;
+    this.siguiente = 0;
   }
 
   async preparar() {
@@ -220,19 +259,38 @@ export class Altavoz {
     fuente.connect(this.contexto.destination);
 
     const ahora = this.contexto.currentTime;
+    const desdeElUltimo = ahora - this.ultimoTrozo;
+    this.ultimoTrozo = ahora;
+
     if (this.siguiente < ahora) {
-      // O es el primer trozo de la frase, o la cola se vació porque un
-      // trozo llegó tarde. En los dos casos se rehace el colchón entero: si
-      // se arrancara pegado al reloj, el siguiente retraso volvería a
-      // cortar, y se entraría en un tartamudeo que ya no para.
+      // La cola está vacía. Ahora hay que decidir POR QUÉ, porque las dos
+      // razones piden cosas opuestas y confundirlas ya salió caro:
       //
-      // Y si esto ya había pasado antes en esta sesión, el colchón crece:
-      // la red de hoy necesita más de lo que se le estaba dando.
-      if (this.huecos) {
+      //   - Si es el principio de una frase, esto es lo normal y no hay nada
+      //     que arreglar. La versión anterior lo contaba como corte, así que
+      //     contaba turnos en vez de fallos: 16 «huecos» en una conversación
+      //     de 16 turnos. Y con cada uno inflaba el colchón, de modo que ANI
+      //     se iba frenando cuanto más se hablaba con ella.
+      //
+      //   - Si es a mitad de una frase, un trozo llegó tarde. ESO es un corte
+      //     audible y es lo que hay que compensar.
+      //
+      // `siguiente` en cero solo lo pone `nuevaFrase()` o `callar()`. Y aun
+      // así se mira el reloj: tras una pausa larga ANI estaba callada a
+      // propósito, no esperando a la red.
+      const empiezaFrase = this.siguiente === 0
+                        || desdeElUltimo > SILENCIO_QUE_NO_ES_HUECO;
+
+      if (!empiezaFrase) {
+        this.huecos++;
+        this.huboCorteEnEsta = true;
         this.colchon = Math.min(COLCHON_MAXIMO, this.colchon + CRECE);
       }
+
+      // En los dos casos se rehace el colchón entero: arrancar pegado al
+      // reloj deja que el siguiente retraso vuelva a cortar, y de ahí se
+      // entra en un tartamudeo que ya no para.
       this.siguiente = ahora + this.colchon;
-      this.huecos++;
     }
     fuente.start(this.siguiente);
     this.siguiente += buf.duration;
@@ -251,7 +309,9 @@ export class Altavoz {
   callar() {
     this.sonando.forEach((f) => { try { f.stop(); } catch (e) { /* ya paró */ } });
     this.sonando = [];
+    // Lo que venga después es una frase nueva, no la continuación de esta.
     this.siguiente = 0;
+    this.huboCorteEnEsta = false;
   }
 
   async cerrar() {

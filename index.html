@@ -102,6 +102,12 @@ button:disabled{opacity:.4}
 }
 .de-juan{align-self:flex-end;background:#123249;border-bottom-right-radius:5px}
 .de-ani{align-self:flex-start;background:var(--carta);border-bottom-left-radius:5px}
+/* El respaldo de cuando Android bloquea la ventana. Se ve tocable porque hay
+   que tocarlo: si no, Juan cree que ANI puso la música y no puso nada. */
+.enlace{
+  cursor:pointer; text-decoration:underline;
+  border:1px solid var(--borde); background:transparent;
+}
 .de-ani b{color:var(--ani);font-weight:600}
 .vivo{opacity:.6;font-style:italic}
 #vacio{margin:auto;text-align:center;color:var(--tenue);padding:0 32px}
@@ -151,6 +157,14 @@ footer{
   padding:26px 22px; overflow-y:auto; display:none;
 }
 #ajustes.abierta{display:block}
+/* La salida. Sin esto se entraba a ajustes y no había manera de volver que
+   no fuera cerrar la app entera. */
+#volver{
+  background:none; border:0; color:var(--tenue); font:inherit; font-size:15px;
+  padding:10px 14px 10px 0; margin:0 0 6px; cursor:pointer;
+  display:flex; align-items:center; gap:9px;
+}
+#volver:hover,#volver:focus-visible{color:var(--texto)}
 #ajustes h2{margin:0 0 6px;font-size:20px}
 #ajustes p{color:var(--tenue);font-size:14px;margin:0 0 22px}
 label{display:block;font-size:13px;color:var(--tenue);margin:16px 0 6px}
@@ -271,6 +285,7 @@ input{
 <input type="file" id="camara" accept="image/*" capture="environment" hidden>
 
 <section id="ajustes">
+  <button id="volver" type="button">&larr; Volver</button>
   <h2>Conectar con ANI</h2>
   <p>Estos dos datos salen del proyecto «ANI de campo» de Apps Script.
      Se guardan solo en este teléfono.</p>
