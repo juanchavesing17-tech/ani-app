@@ -508,6 +508,14 @@ function contarComoVa() {
     `Voz rescatada        ${c.msDeVozRescatada} ms`,
     '   Lo que usted dijo mientras la línea se abría, y que antes',
     '   se perdía. Si esto sale alto, ahí estaba la demora.',
+    '',
+    // Lo que se siente lento EN MEDIO de la conversación no es abrir: es
+    // quedarse callada mientras consulta algo.
+    ...(c.peorHerramienta ? [
+      `La más lenta         ${c.peorHerramienta}`,
+      `   tardó ${c.msPeorHerramienta} ms, y el servidor solo ${c.msPeorEnServidor} ms`,
+      '   La diferencia es arranque en frío de Google y red.',
+    ] : ['Ninguna herramienta usada todavía en esta conversación.']),
   ].join('\n');
 }
 

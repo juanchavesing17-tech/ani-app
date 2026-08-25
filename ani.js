@@ -85,6 +85,8 @@ export class Conversacion {
     this.cuenta = {
       interrupciones: 0, huecos: 0, trozos: 0,
       msHastaAbrir: 0, msHastaLaPrimeraPalabra: 0, msDeVozRescatada: 0,
+      // La consulta que más hizo esperar, y cuánto de eso fue el servidor.
+      peorHerramienta: '', msPeorHerramienta: 0, msPeorEnServidor: 0,
       _pedido: 0, _finDeTurno: 0, _dejoDeHablar: 0,
     };
   }
@@ -392,6 +394,28 @@ export class Conversacion {
       console.log(`${l.name}: ${tardo} ms `
                   + `(${seHaceAqui(l.name) ? 'aquí' : 'servidor'})`);
 
+      // La herramienta más lenta del rato, para el medidor. Hasta ahora solo
+      // se desglosaba la apertura, y las herramientas son lo que se siente
+      // lento EN MEDIO de la conversación: son las que hacen que ANI se quede
+      // callada mientras Juan espera.
+      // `>` a secas dejaba fuera la PRIMERA, porque compararla contra cero da
+      // falso cuando tarda cero. Y en una conversación con una sola consulta,
+      // esa primera es justo la que interesa.
+      if (!this.cuenta.peorHerramienta || tardo > this.cuenta.msPeorHerramienta) {
+        this.cuenta.peorHerramienta = l.name;
+        this.cuenta.msPeorHerramienta = tardo;
+        this.cuenta.msPeorEnServidor = (salida && salida._ms) || 0;
+      }
+
+      // Y las medidas NO viajan a Gemini.
+      //
+      // `responder_` le pega `_ms` a toda respuesta del servidor, y esto se
+      // le pasa al modelo tal cual. O sea que en cada turno ANI recibía un
+      // `_ms: 234` que no significa nada para ella: tokens gastados en
+      // fontanería de medición, y un dato de más que puede acabar
+      // mencionando. Se queda aquí, que es donde sirve.
+      salida = sinLasMedidas(salida);
+
       // Una herramienta puede pedir que la app HAGA algo, no solo que
       // conteste. Y hasta ahora no se hacía: `poner_musica` resolvía el vídeo
       // de YouTube, devolvía el enlace, ANI decía «ya la puse»… y no pasaba
@@ -432,6 +456,22 @@ export class Conversacion {
     await this.altavoz.cerrar();
     this.avisar('dormida');
   }
+}
+
+/**
+ * La respuesta sin la fontanería de medición.
+ *
+ * Lo que va a Gemini tiene que ser lo que la herramienta averiguó, y nada
+ * más. Un `_ms` colado ahí son tokens en cada turno y un dato que ANI podría
+ * acabar diciendo en voz alta.
+ */
+function sinLasMedidas(salida) {
+  if (!salida || typeof salida !== 'object') return salida;
+  const limpia = {};
+  for (const k of Object.keys(salida)) {
+    if (!k.startsWith('_ms')) limpia[k] = salida[k];
+  }
+  return limpia;
 }
 
 // ------------------------------------------------------- base64 y binario
