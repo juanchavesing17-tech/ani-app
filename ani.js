@@ -87,7 +87,7 @@ export class Conversacion {
       msHastaAbrir: 0, msHastaLaPrimeraPalabra: 0, msDeVozRescatada: 0,
       // La consulta que más hizo esperar, y cuánto de eso fue el servidor.
       peorHerramienta: '', msPeorHerramienta: 0, msPeorEnServidor: 0,
-      _pedido: 0, _finDeTurno: 0, _dejoDeHablar: 0,
+      _pedido: 0, _dejoDeHablar: 0,
     };
   }
 
@@ -339,7 +339,6 @@ export class Conversacion {
       // Se reinicia la cuenta de trozos: la espera se mide por turno, no
       // acumulada, que es lo que Juan nota.
       this.cuenta.trozos = 0;
-      this.cuenta._finDeTurno = performance.now();
       // Lo que llegue a partir de aquí es una frase NUEVA. Sin este aviso,
       // el altavoz no puede distinguir «empieza a hablar» de «se quedó sin
       // audio a mitad», y cuenta un corte en cada turno. Ver `microfono.js`.
