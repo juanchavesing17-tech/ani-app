@@ -301,6 +301,15 @@ export class Conversacion {
         if (!this.cuenta.trozos && this.cuenta._dejoDeHablar) {
           this.cuenta.msHastaLaPrimeraPalabra =
             Math.round(performance.now() - this.cuenta._dejoDeHablar);
+          // Y se consume. Sin esto, un turno en el que ANI hable sin que Juan
+          // haya dicho nada —al volver de una herramienta, por ejemplo— se
+          // mediría desde la última vez que él habló, que pueden ser minutos.
+          // Así salieron 48.856 ms en una conversación que iba bien.
+          //
+          // Es la tercera vez que uno de estos contadores miente. La regla
+          // que faltaba: un cronómetro se para cuando se lee, no se queda
+          // corriendo a la espera de que alguien lo mire.
+          this.cuenta._dejoDeHablar = 0;
         }
         this.cuenta.trozos++;
         this.altavoz.encolar(bytesDe(p.inlineData.data));
