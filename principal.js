@@ -208,9 +208,13 @@ function avisar(que, extra = {}) {
     return;
   }
 
-  // Una herramienta pidió abrir algo — YouTube, casi siempre. Se hace aquí y
-  // no dentro de `ani.js` porque abrir ventanas es cosa de la interfaz.
+  // Una herramienta pidió abrir algo — YouTube o WhatsApp. Se hace aquí y no
+  // dentro de `ani.js` porque abrir ventanas es cosa de la interfaz.
   if (que === 'abrir') { abrirFuera(extra.url); return; }
+
+  // ANI acaba de apuntar algo. Ella ya contestó —el apunte está guardado en
+  // el teléfono— y la subida a la hoja va por detrás, sin hacerla esperar.
+  if (que === 'subir bitacora') { subirApuntesAtrasados(); return; }
 
   // Cuando ANI propone algo que sale hacia fuera, la tarjeta aparece sola.
   // Solo se pregunta cuando acaba de proponerse algo: preguntarlo al final de
@@ -628,7 +632,7 @@ if (!servidor.estaConfigurada()) {
   // los 2,5 segundos del viaje al Apps Script.
   adelantada = new Conversacion(servidor.pedir, avisar, asentar);
   adelantada.pedirLlaveConTiempo();
-  subirApuntesAtrasados();
+  subirApuntesAtrasados(true);   // al arrancar sí se anuncia
 
   // Abierta por el despertador: `…/?despertar`. Lo único que tiene que hacer
   // el teléfono a las siete es abrir esta dirección; el resto es cosa de
@@ -644,16 +648,20 @@ if (!servidor.estaConfigurada()) {
  * la red sirva de verdad— pero como al primer fallo se para y los apuntes se
  * quedan donde están, un aviso prematuro no cuesta nada.
  */
-async function subirApuntesAtrasados() {
+async function subirApuntesAtrasados(avisando = false) {
   if (!bitacoraLocal.cuantosEsperan()) return;
   const r = await bitacoraLocal.subirLoQueEspera(servidor.pedir);
-  if (r.subidos) {
+
+  // Solo se anuncia cuando había apuntes ATASCADOS —al arrancar la app o al
+  // volver la señal—. En el camino normal, apuntar y subir son lo mismo desde
+  // fuera, y decirlo cada vez sería ruido en la conversación.
+  if (avisando && r.subidos) {
     pintar('ani', r.subidos === 1
       ? 'Subí el apunte que tenía guardado sin señal.'
       : `Subí los ${r.subidos} apuntes que tenía guardados sin señal.`);
   }
 }
-window.addEventListener('online', subirApuntesAtrasados);
+window.addEventListener('online', () => subirApuntesAtrasados(true));
 
 // Sin esto, en Android la barra de direcciones al aparecer y desaparecer
 // cambia la altura y el chat da saltos.

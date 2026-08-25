@@ -176,6 +176,8 @@ export class Conversacion {
   }
 
   abrirSocket(token, modelo) {
+    // Hasta que Gemini confirme el setup, la sesion NO acepta audio.
+    this.lista = false;
     this.ws = new WebSocket(`${CASA}?access_token=${encodeURIComponent(token)}`);
     this.ws.binaryType = 'arraybuffer';
 
@@ -194,6 +196,7 @@ export class Conversacion {
       const limpio = e.code === 1000 || !this.encendida;
       this.avisar(limpio ? 'dormida' : 'se cayo', { codigo: e.code });
       this.encendida = false;
+      this.lista = false;
       this.mic && this.mic.apagar();
       this.altavoz.callar();
     };
@@ -218,7 +221,19 @@ export class Conversacion {
     // oírle.
     //
     // Ahora se guarda y se suelta de golpe en cuanto la sesión abre.
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    // Se espera a `setupComplete`, NO a que el socket esté abierto.
+    //
+    // Esa diferencia es el fallo que hacía que a veces ANI abriera la línea,
+    // se quedara escuchando y no contestara nunca. El socket queda `OPEN` en
+    // cuanto conecta, pero la sesión no está lista hasta que Gemini confirma
+    // el `setup` — y entre una cosa y otra pasan décimas de segundo en las
+    // que el micrófono ya está soltando un trozo cada 64 ms.
+    //
+    // La Live API exige que no llegue nada antes del `setupComplete`. Si le
+    // cae audio en esa rendija, la sesión queda inservible: abierta,
+    // escuchando, muda. Y era intermitente porque dependía de si en ese
+    // instante había voz o ruido.
+    if (!this.lista) {
       this.esperando.push(arrayBuffer);
       // Tope de unos 3 segundos. Más atrás no interesa: si abrir tardó tanto,
       // lo que dijo al principio ya no viene a cuento, y mandarlo entero
@@ -260,6 +275,8 @@ export class Conversacion {
     try { m = JSON.parse(texto); } catch (e) { return; }
 
     if (m.setupComplete) {
+      // Desde AQUI se puede mandar audio, no desde que abrio el socket.
+      this.lista = true;
       this.cuenta.msHastaAbrir =
         Math.round(performance.now() - this.cuenta._pedido);
       this.soltarLoGuardado();
@@ -354,11 +371,37 @@ export class Conversacion {
         { nombre: l.name, argumentos: l.args || {} });
 
       try {
-        // Primero se mira si esto se puede hacer aquí mismo. Lo que no
-        // necesita la cuenta de Google de Juan ni una clave secreta no tiene
-        // por qué costar dos segundos de viaje al servidor. Ver
-        // `aqui_mismo.js`: ahí está medido y explicado.
-        if (seHaceAqui(l.name)) {
+        // APUNTAR NO HACE ESPERAR. Se guarda en el teléfono y se contesta al
+        // instante; la subida a la hoja va por detrás.
+        //
+        // El medidor de Juan lo puso en números: `apuntar_en_bitacora` tardaba
+        // 3.046 ms, de los cuales 1.716 eran el viaje del servidor a Sheets.
+        // Eso es mucho rato callado para alguien que está en obra con las
+        // manos ocupadas y solo quería dejar una nota.
+        //
+        // No es una promesa a la ligera: la cola ya guarda de forma duradera,
+        // reintenta, mantiene el orden y **no borra nada hasta que el servidor
+        // confirma**. Lo que cambia es la garantía —«va a estar en la hoja» en
+        // vez de «ya está»— y eso se ve en ajustes, que dice cuántos esperan.
+        // Es lo contrario del fallo de ayer, donde se perdía en silencio.
+        if (l.name === 'apuntar_en_bitacora') {
+          const a = l.args || {};
+          salida = guardarSinSenal(a.nota, a.obra,
+                                   this.posicion && this.posicion.nombre);
+          if (!salida.error) {
+            // La obra sale de la cola, que es quien recuerda la última que
+            // nombró — no de lo que ANI acabe de decir. Ver `bitacora_local`.
+            const donde = salida.obra;
+            salida = { apuntado: true, obra: donde,
+                       aviso: donde ? 'Apuntado en ' + donde + '.'
+                                    : 'Apuntado.' };
+            // Se dispara la subida, pero no se espera: eso es todo el punto.
+            this.avisar('subir bitacora');
+          }
+        } else if (seHaceAqui(l.name)) {
+          // Lo que no necesita la cuenta de Google de Juan ni una clave
+          // secreta no tiene por qué costar dos segundos de viaje al
+          // servidor. Ver `aqui_mismo.js`: ahí está medido y explicado.
           try {
             salida = await AQUI[l.name](l.args || {}, this.posicion);
           } catch (fallo) {
@@ -374,21 +417,13 @@ export class Conversacion {
           salida = await alServidor();
         }
       } catch (e) {
-        // Un apunte de obra NO se pierde porque no haya señal. Es el único
-        // sitio donde el fallo del servidor no se cuenta como fallo: se
-        // guarda en el teléfono y sube cuando vuelva la cobertura.
+        // Se le contesta SIEMPRE, aunque sea con el fallo. Si se deja sin
+        // respuesta, la sesión se queda esperando y ANI enmudece.
         //
-        // Justo cuando más falta hace la bitácora —en obra, lejos— es cuando
-        // menos se puede contar con la red. Ver `bitacora_local.js`.
-        if (l.name === 'apuntar_en_bitacora') {
-          const a = l.args || {};
-          salida = guardarSinSenal(a.nota, a.obra,
-                                   this.posicion && this.posicion.nombre);
-        } else {
-          // En lo demás se le contesta SIEMPRE, aunque sea con el fallo. Si
-          // se deja sin respuesta, la sesión se queda esperando y ANI enmudece.
-          salida = { error: 'No pude consultarlo: ' + String(e).slice(0, 120) };
-        }
+        // Apuntar ya no puede llegar aquí: no pasa por el servidor. Va a la
+        // cola del teléfono y sube después, así que la falta de señal dejó de
+        // ser un caso especial y pasó a ser el camino normal.
+        salida = { error: 'No pude consultarlo: ' + String(e).slice(0, 120) };
       }
       const tardo = Math.round(performance.now() - t0);
       console.log(`${l.name}: ${tardo} ms `
@@ -448,6 +483,10 @@ export class Conversacion {
 
   async apagar() {
     this.encendida = false;
+    // Se apaga aquí y no solo en `onclose`: colgar y volver a llamar enseguida
+    // podría pillar la bandera encendida de la sesión anterior, y entonces el
+    // audio saldría antes del `setup` de la nueva.
+    this.lista = false;
     if (this.ws) {
       try { this.ws.close(1000, 'hasta luego'); } catch (e) { /* ya cerrado */ }
       this.ws = null;

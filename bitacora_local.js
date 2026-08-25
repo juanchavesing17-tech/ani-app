@@ -70,11 +70,30 @@ export function cuantosEsperan() {
  * está en el teléfono y no en la bitácora todavía: sabiéndolo, si el apunte
  * es crítico puede buscarse un sitio con señal.
  */
+/**
+ * La última obra que nombró, recordada AQUÍ.
+ *
+ * Antes esto lo llevaba el servidor, y funcionaba mientras cada apunte pasaba
+ * por él. Ahora los apuntes se guardan primero en el teléfono y suben después,
+ * así que el servidor ya no ve el orden en que se dijeron — y sin esto se
+ * perdería lo que hace que la bitácora sirva en obra: **decir la obra una vez
+ * y que se quede.** En obra nadie repite el mismo dato veinte veces.
+ */
+const OBRA = 'ani_ultima_obra';
+
 export function guardarSinSenal(nota, obra, donde) {
   const lista = leer();
+
+  obra = String(obra || '').trim();
+  if (obra) {
+    try { localStorage.setItem(OBRA, obra); } catch (e) { /* da igual */ }
+  } else {
+    obra = localStorage.getItem(OBRA) || '';
+  }
+
   lista.push({
     nota: String(nota || '').slice(0, 1000),
-    obra: String(obra || ''),
+    obra: obra,
     donde: String(donde || ''),
     cuando: new Date().toISOString(),
   });
@@ -85,10 +104,15 @@ export function guardarSinSenal(nota, obra, donde) {
   }
   return {
     apuntado: true,
-    sin_senal: true,
+    obra: obra || null,
     esperando: lista.length,
     aviso: 'Sin señal. Lo tengo guardado aquí y lo subo apenas vuelva.',
   };
+}
+
+/** La obra en la que se está apuntando ahora mismo, si hay alguna. */
+export function obraActual() {
+  return localStorage.getItem(OBRA) || '';
 }
 
 /**
