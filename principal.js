@@ -437,6 +437,14 @@ function contarComoVa() {
     '   Si esto sube, es la RED.',
     '',
     `Tardó en abrir       ${c.msHastaAbrir} ms`,
+    // El total se parte en tres, porque solo uno de los tres se puede
+    // arreglar. Sin esta división, «tarda cuatro segundos» no dice a quién
+    // hay que apretar — y adivinarlo ya salió caro una vez.
+    `   de eso, el servidor  ${c.msServidor || 0} ms`,
+    `   y dentro, Gemini     ${c.msGemini || 0} ms`,
+    `   el resto (${Math.max(0, (c.msHastaAbrir || 0) - (c.msServidor || 0))} ms) es arranque en frío de Google y red.`,
+    '   Eso no se puede tocar desde aquí.',
+    '',
     `Tardó en contestar   ${c.msHastaLaPrimeraPalabra} ms`,
     `Voz rescatada        ${c.msDeVozRescatada} ms`,
     '   Lo que usted dijo mientras la línea se abría, y que antes',

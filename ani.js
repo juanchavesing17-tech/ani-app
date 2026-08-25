@@ -155,6 +155,12 @@ export class Conversacion {
       llave = await (this.llavePedida
                      || this.pedirAlServidor('token_de_voz', {}));
       this.dejarDePedirLlaves();
+      // El servidor dice cuánto tardó ÉL, y cuánto de eso fue Gemini. Lo que
+      // no cuadre con lo que mide el teléfono es arranque en frío de Apps
+      // Script y red — que no se pueden tocar desde aquí, y por eso importa
+      // saber cuánto son antes de intentar arreglar nada. Ver `seguridad.gs`.
+      this.cuenta.msServidor = llave._ms || 0;
+      this.cuenta.msGemini = llave._ms_gemini || 0;
       if (llave.error) throw new Error(llave.error);
     } catch (e) {
       await this.apagar();
