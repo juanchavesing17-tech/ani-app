@@ -16,6 +16,7 @@
 
 import { Microfono, Altavoz } from './microfono.js';
 import { AQUI, seHaceAqui } from './aqui_mismo.js';
+import { guardarSinSenal } from './bitacora_local.js';
 
 /**
  * La dirección de la Live API **para tokens efímeros**, que NO es la misma
@@ -356,9 +357,21 @@ export class Conversacion {
           salida = await alServidor();
         }
       } catch (e) {
-        // Se le contesta SIEMPRE, aunque sea con el fallo. Si se deja sin
-        // respuesta, la sesión se queda esperando y ANI enmudece.
-        salida = { error: 'No pude consultarlo: ' + String(e).slice(0, 120) };
+        // Un apunte de obra NO se pierde porque no haya señal. Es el único
+        // sitio donde el fallo del servidor no se cuenta como fallo: se
+        // guarda en el teléfono y sube cuando vuelva la cobertura.
+        //
+        // Justo cuando más falta hace la bitácora —en obra, lejos— es cuando
+        // menos se puede contar con la red. Ver `bitacora_local.js`.
+        if (l.name === 'apuntar_en_bitacora') {
+          const a = l.args || {};
+          salida = guardarSinSenal(a.nota, a.obra,
+                                   this.posicion && this.posicion.nombre);
+        } else {
+          // En lo demás se le contesta SIEMPRE, aunque sea con el fallo. Si
+          // se deja sin respuesta, la sesión se queda esperando y ANI enmudece.
+          salida = { error: 'No pude consultarlo: ' + String(e).slice(0, 120) };
+        }
       }
       const tardo = Math.round(performance.now() - t0);
       console.log(`${l.name}: ${tardo} ms `

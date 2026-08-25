@@ -303,6 +303,20 @@ input{
   <button id="olvidar" style="width:100%;margin-top:10px;color:var(--rojo)">
     Olvidar este acceso</button>
 
+  <!-- La bitácora de obra y lo que ANI recuerda. Aquí y no en la pantalla
+       principal: se consultan de vez en cuando, y la principal tiene que
+       poder usarse con una mano y sin mirar. -->
+  <h2 style="margin-top:34px">La bitácora</h2>
+  <p id="esperando">Lo que apunta en obra. Se guarda en una hoja de cálculo
+     de su Drive.</p>
+  <button id="verBitacora" style="width:100%">Abrir la hoja</button>
+
+  <h2 style="margin-top:30px">Lo que recuerda de usted</h2>
+  <p>Lo que le haya pedido recordar. Dígale «olvida lo de…» para quitar algo.</p>
+  <pre id="memoria" style="font-size:13px;line-height:1.7;white-space:pre-wrap;
+       background:var(--carta);border:1px solid var(--borde);border-radius:12px;
+       padding:14px;margin:0;color:var(--texto)">Cargando…</pre>
+
   <!-- Cómo va la conversación.
        Estaba escondido detrás de un toque largo y Juan no lo encontró. Un
        diagnóstico que hay que adivinar cómo se abre no sirve de nada. -->

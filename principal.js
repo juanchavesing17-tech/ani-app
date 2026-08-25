@@ -7,6 +7,7 @@
 import { Conversacion } from './ani.js';
 import { FondoParticulas } from './particulas.js';
 import * as servidor from './servidor.js';
+import * as bitacoraLocal from './bitacora_local.js';
 
 const $ = (id) => document.getElementById(id);
 const fondo = new FondoParticulas($('particulas'));
@@ -445,8 +446,47 @@ function contarComoVa() {
 
 // ---------------------------------------------------------- los ajustes
 
+/**
+ * Abre la hoja de la bitácora. El enlace lo da el servidor, que es quien
+ * sabe cuál es: se crea sola la primera vez que Juan apunta algo.
+ */
+$('verBitacora').onclick = async () => {
+  $('verBitacora').textContent = 'Buscándola…';
+  try {
+    const r = await servidor.pedir('abrir_bitacora', {});
+    if (r.error) throw new Error(r.error);
+    abrirFuera(r.url);
+  } catch (e) {
+    $('aviso').textContent = String(e).replace(/^Error:\s*/, '');
+  }
+  $('verBitacora').textContent = 'Abrir la hoja';
+};
+
+/** Lo que ANI recuerda, para que Juan pueda revisarlo y no adivinarlo. */
+async function contarQueRecuerda() {
+  const caja = $('memoria');
+  try {
+    const r = await servidor.pedir('que_recuerdas', {});
+    caja.textContent = r.cuantos
+      ? r.recuerdos.map((x) => '· ' + x).join('\n')
+      : 'Todavía no le ha pedido que recuerde nada.';
+  } catch (e) {
+    caja.textContent = 'No pude consultarlo ahora mismo.';
+  }
+}
+
 function abrirAjustes() {
   contarComoVa();
+  contarQueRecuerda();
+
+  // Si hay apuntes esperando señal, decirlo aquí. Juan tiene que poder saber
+  // que algo suyo no ha llegado todavía a la bitácora.
+  const esperan = bitacoraLocal.cuantosEsperan();
+  $('esperando').textContent = esperan
+    ? (esperan === 1
+        ? 'Hay 1 apunte esperando señal para subir.'
+        : `Hay ${esperan} apuntes esperando señal para subir.`)
+    : 'Lo que apunta en obra. Se guarda en una hoja de cálculo de su Drive.';
   $('url').value = localStorage.getItem('ani_url') || '';
   $('secreto').value = '';
   // Sin configurar no hay a dónde volver: la pantalla principal no haría
@@ -513,7 +553,27 @@ if (!servidor.estaConfigurada()) {
   // los 2,5 segundos del viaje al Apps Script.
   adelantada = new Conversacion(servidor.pedir, avisar, asentar);
   adelantada.pedirLlaveConTiempo();
+  subirApuntesAtrasados();
 }
+
+/**
+ * Los apuntes que se dictaron sin señal, en cuanto la haya.
+ *
+ * Se intenta al arrancar y cada vez que el teléfono dice que volvió la
+ * conexión. Lo de `online` no siempre es de fiar —a veces avisa antes de que
+ * la red sirva de verdad— pero como al primer fallo se para y los apuntes se
+ * quedan donde están, un aviso prematuro no cuesta nada.
+ */
+async function subirApuntesAtrasados() {
+  if (!bitacoraLocal.cuantosEsperan()) return;
+  const r = await bitacoraLocal.subirLoQueEspera(servidor.pedir);
+  if (r.subidos) {
+    pintar('ani', r.subidos === 1
+      ? 'Subí el apunte que tenía guardado sin señal.'
+      : `Subí los ${r.subidos} apuntes que tenía guardados sin señal.`);
+  }
+}
+window.addEventListener('online', subirApuntesAtrasados);
 
 // Sin esto, en Android la barra de direcciones al aparecer y desaparecer
 // cambia la altura y el chat da saltos.
