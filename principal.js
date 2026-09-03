@@ -56,35 +56,90 @@ const vivas = { juan: null, ani: null };
  * En un computador ni se nota. En un teléfono compite con la voz, y es parte
  * de por qué sonaba entrecortada. Ahora se tocan cinco atributos y ya.
  */
-const RECTOS = [];
+/* ── ANI, la de la pantalla ────────────────────────────────────────────────
+ *
+ * Los gestos son los mismos que en el panel del computador: los escribio
+ * Juan mirandolos correr. Falta el giro de cabeza (fotogramas 17-20): a
+ * 340 px en un telefono no se apreciaria y costaba cuatro imagenes.
+ *
+ * Las cinco barritas de voz que habia aqui ya no hacen falta --el nivel lo
+ * lleva el resplandor-- y de paso se le quita trabajo al hilo que atiende
+ * la voz, que en un telefono es el que importa.
+ */
+const GESTOS = {
+  dormida:    { pasos: [1, 2, 3, 2, 1],       ms: 600 },
+  escuchando: { pasos: [3, 10, 2, 1, 2, 3],   ms: 280 },
+  pensando:   { pasos: [1, 2, 3, 2, 1],       ms: 280 },
+  hablando:   { pasos: [4, 5, 6, 7, 6, 4, 5], ms: 200 },
+  error:      { pasos: [8, 13, 12],           ms: 340, veces: 2 },
+};
 
-function prepararOndas() {
-  const g = $('ondas');
-  if (!g || RECTOS.length) return;
-  for (let i = 0; i < 5; i++) {
-    const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    r.setAttribute('x', 186 + i * 7);
-    r.setAttribute('width', '3.4');
-    r.setAttribute('rx', '1.7');
-    r.setAttribute('y', '231');
-    r.setAttribute('height', '2');
-    g.appendChild(r);
-    RECTOS.push(r);
+/* Los DOCE estados de la app repartidos entre las cinco secuencias.
+ *
+ * La app tiene mas estados que el panel --pedir permiso, abrir la linea,
+ * cortarse-- y por eso las caras de error aqui trabajan de verdad: «se
+ * corto» y «no pude abrir el microfono» son exactamente eso. */
+const CARA_DE = {
+  'dormida': 'dormida',
+  'pidiendo permiso': 'pensando',
+  'abriendo': 'pensando',
+  'buscando': 'pensando',
+  'escuchando': 'escuchando',
+  'oyendo': 'escuchando',
+  'hablando': 'hablando',
+  'se cayo': 'error',
+  'sin permiso': 'error',
+  'sin microfono': 'error',
+};
+
+let aniSitua = '';          // vacia a proposito: si arranca con el valor que
+let aniCara = 0;            // se le va a pedir, el primer cambio no hace nada
+let aniPaso = 0, aniVuelta = 0, aniReloj = null;
+
+function aniPoner(n, ms) {
+  if (n === aniCara) return;
+  aniCara = n;
+  const fig = $('figura');
+  if (!fig) return;
+  fig.style.setProperty('--cruce',
+    Math.min(140, Math.max(40, Math.round(ms / 3))) + 'ms');
+  const capas = fig.children;
+  for (let i = 0; i < capas.length; i++) {
+    capas[i].classList.toggle('puesta', +capas[i].dataset.n === n);
   }
 }
 
-const FORMA = [0.45, 0.8, 1, 0.8, 0.45];
-
-function pintarOndas(nivel) {
-  if (!RECTOS.length) prepararOndas();
-  const alto = Math.max(2, Math.min(1, nivel * 3) * 26);
-  for (let i = 0; i < RECTOS.length; i++) {
-    // Las de en medio más altas que las de los lados: así parece una voz y
-    // no un ecualizador de cinco palos iguales.
-    const h = Math.max(2, alto * FORMA[i] * (0.75 + Math.random() * 0.5));
-    RECTOS[i].setAttribute('height', h.toFixed(1));
-    RECTOS[i].setAttribute('y', (232 - h / 2).toFixed(1));
+function aniAvanzar() {
+  const s = GESTOS[aniSitua];
+  if (!s) return;
+  aniPoner(s.pasos[aniPaso], s.ms);
+  aniPaso++;
+  if (aniPaso >= s.pasos.length) {
+    aniPaso = 0;
+    aniVuelta++;
+    // Una reaccion pasa y se queda quieta: en bucle seria un tic.
+    if (s.veces && aniVuelta >= s.veces) {
+      aniPaso = s.pasos.length - 1;
+      aniPoner(s.pasos[aniPaso], 300);
+      return;
+    }
   }
+  aniReloj = setTimeout(aniAvanzar, s.ms);
+}
+
+function aniGesto(estado) {
+  const cual = CARA_DE[estado] || 'dormida';
+  if (cual === aniSitua) return;
+  clearTimeout(aniReloj);
+  aniSitua = cual; aniPaso = 0; aniVuelta = 0;
+  document.body.dataset.ani = cual;
+  aniAvanzar();
+}
+
+/* El resplandor sigue la voz. Es lo que separa un adorno de un indicador. */
+function pintarOndas(nivel) {
+  const b = $('brilloVoz');
+  if (b) b.setAttribute('opacity', Math.min(.85, .16 + nivel * 3).toFixed(2));
 }
 
 /** Al primer mensaje el núcleo se aparta para dejar leer. */
@@ -223,6 +278,7 @@ function avisar(que, extra = {}) {
   if (que === 'hay propuesta') { mirarSiHayPendiente(); return; }
 
   $('estado').textContent = ROTULO[que] || que;
+  aniGesto(que);
   fondo.cambiarEstado(que);
 
   if (que === 'oyendo') pintarVivo('juan', extra.texto);
@@ -772,3 +828,7 @@ ajustarAlto();
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => { /* da igual */ });
 }
+
+/* Arranca en reposo. No espera a que carguen los once: los tres primeros van
+ * sin `lazy` y son los unicos que hacen falta para empezar. */
+aniGesto('dormida');

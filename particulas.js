@@ -30,10 +30,10 @@
  */
 
 const ESTADOS = {
-  dormida:    { color: [80, 200, 230], velocidad: 0.55, enlace: 95,  destello: 0.0010, pulso: 0.006 },
-  escuchando: { color: [0, 255, 255],  velocidad: 1.00, enlace: 110, destello: 0.0030, pulso: 0.020 },
-  pensando:   { color: [0, 255, 255],  velocidad: 2.10, enlace: 125, destello: 0.0075, pulso: 0.060 },
-  hablando:   { color: [255, 165, 40], velocidad: 1.35, enlace: 115, destello: 0.0050, pulso: 0.035 },
+  dormida:    { color: [86, 110, 190],  velocidad: 0.55, enlace: 95,  destello: 0.0010, pulso: 0.006 },
+  escuchando: { color: [34, 211, 238], velocidad: 1.00, enlace: 110, destello: 0.0030, pulso: 0.020 },
+  pensando:   { color: [139, 92, 246], velocidad: 2.10, enlace: 125, destello: 0.0075, pulso: 0.060 },
+  hablando:   { color: [232, 121, 249], velocidad: 1.35, enlace: 115, destello: 0.0050, pulso: 0.035 },
 };
 
 // Los estados de la app no son los mismos nombres que los del fondo.

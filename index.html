@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#030a12">
+<meta name="theme-color" content="#070b16">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
@@ -12,9 +12,20 @@
 <style>
 /* Los mismos colores del panel del computador, para que sea la misma ANI. */
 :root{
-  --fondo:#030a12; --carta:#0a1622; --borde:#16293d;
-  --texto:#dce8f4; --tenue:#7b93ab; --ani:#7fd4ff; --rojo:#ff6b6b;
+  --fondo:#070b16; --fondo-hondo:#03050c;
+  --carta:#0f1528; --borde:#22305a;
+  --texto:#dbe7f5; --tenue:#5f7396;
+  --cian:#22d3ee; --cian-sordo:#0e7490; --cian-claro:#a5f3fc;
+  --violeta:#a855f7; --violeta-claro:#d8b4fe; --violeta-sordo:#6d28d9;
+  --ambar:#fbbf24; --verde:#34d399; --rojo:#fb7185;
+  /* El acento de ANI es el cian claro del panel. Se conserva el nombre
+     porque lo usan .de-ani b y los titulos de la tarjeta. */
+  --ani:var(--cian-claro);
   --alto: 100dvh;
+  /* Que el navegador sepa que esto es oscuro. Sin esto pinta a su manera lo
+     que no es HTML nuestro: las barras de desplazamiento, los desplegables y
+     el cursor de las cajas de texto salen claros sobre el fondo azul-negro. */
+  color-scheme: dark;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;overscroll-behavior:none}
@@ -35,11 +46,55 @@ header,#nucleo,#chat,footer,#aviso,#tarjeta{position:relative;z-index:1}
    Es el del panel del computador. En una pantalla de teléfono no puede
    comerse el sitio de la conversación, así que arranca grande —cuando no
    hay nada que leer, ES la pantalla— y se encoge al primer mensaje. */
+/* SIN `aspect-ratio:1`: el avatar es un busto (118% de alto sobre su ancho),
+   no un circulo, y dentro de una caja cuadrada se sale por abajo. */
 #nucleo{
-  width:100%; max-width:340px; aspect-ratio:1; margin:0 auto;
+  width:100%; max-width:340px; margin:0 auto; position:relative;
   flex:none; transition:max-width .45s ease, opacity .45s ease;
 }
-#nucleo.chico{max-width:120px;opacity:.55}
+#nucleo.chico{max-width:132px;opacity:.85}
+#figura{position:absolute;inset:0;transform:scale(1.16);
+  transform-origin:50% 12%;
+  -webkit-mask-image:radial-gradient(ellipse 58% 54% at 50% 33%,#000 46%,transparent 100%);
+  mask-image:radial-gradient(ellipse 58% 54% at 50% 33%,#000 46%,transparent 100%)}
+#figura img{position:absolute;left:0;top:0;width:100%;display:block;
+  opacity:0;transition:opacity var(--cruce,90ms) linear}
+#figura img.puesta{opacity:1}
+#nucleo>svg{position:relative;width:100%;height:auto;aspect-ratio:100/118;
+  display:block}
+#nucleo>svg,#figura{pointer-events:none}
+/* Encogida deja de tener sitio para el desvanecido de los lados: se recorta
+   por arriba nada mas, o se queda en un fantasma. */
+/* Encogida, la elipse del tamano grande le comeria los bordes hasta dejar
+   un fantasma; pero un degradado solo por arriba deja los lados cortados a
+   cuchillo. Hacen falta los dos ejes, con el de los lados suave. */
+#nucleo.chico #figura{transform:scale(1.3);transform-origin:50% 16%;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0%,#000 22%),
+    linear-gradient(to right,transparent 0%,#000 12%,#000 88%,transparent 100%);
+  mask-image:linear-gradient(to bottom,transparent 0%,#000 22%),
+    linear-gradient(to right,transparent 0%,#000 12%,#000 88%,transparent 100%);
+  -webkit-mask-composite:source-in;mask-composite:intersect}
+
+@keyframes aniGira{to{transform:rotate(360deg)}}
+@keyframes aniGiraI{to{transform:rotate(-360deg)}}
+.a-lento{animation:aniGira 22s linear infinite;transform-origin:var(--o)}
+.a-medio{animation:aniGiraI 34s linear infinite;transform-origin:var(--o)}
+.a-fondo{animation:aniGira 52s linear infinite;transform-origin:var(--o)}
+.a-barre{animation:aniGiraI 6s linear infinite;transform-origin:var(--o)}
+@keyframes aniLate{0%,100%{opacity:.45;transform:scale(1)}
+                   50%{opacity:.9;transform:scale(1.06)}}
+.a-emisor{animation:aniLate 3.4s ease-in-out infinite;
+  transform-origin:var(--e);transform-box:fill-box}
+body[data-ani="escuchando"] .a-barre{animation-duration:3.2s}
+body[data-ani="pensando"]   .a-barre{animation-duration:1.5s}
+body[data-ani="hablando"]   .a-barre{animation-duration:4.5s}
+body[data-ani="error"]      .a-barre{animation-duration:.9s}
+/* Un telefono que pide menos movimiento tiene sus motivos: bateria, mareo,
+   o las dos. Se queda quieta, pero se sigue viendo. */
+@media (prefers-reduced-motion: reduce){
+  .a-lento,.a-medio,.a-fondo,.a-barre,.a-emisor{animation:none}
+  #figura img{transition:none}
+}
 #nucleo text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
              font-weight:600}
 
@@ -100,7 +155,7 @@ button:disabled{opacity:.4}
      el mismo destrozo que las equis en el panel del computador. */
   overflow-wrap:anywhere; min-width:0;
 }
-.de-juan{align-self:flex-end;background:#123249;border-bottom-right-radius:5px}
+.de-juan{align-self:flex-end;background:#12325a;border-bottom-right-radius:5px}
 .de-ani{align-self:flex-start;background:var(--carta);border-bottom-left-radius:5px}
 /* El respaldo de cuando Android bloquea la ventana. Se ve tocable porque hay
    que tocarlo: si no, Juan cree que ANI puso la música y no puso nada. */
@@ -120,11 +175,11 @@ footer{
 }
 #conversar{
   flex:1; font-weight:600; padding:16px;
-  background:linear-gradient(180deg,#12496b,#0d3350);
-  border-color:#1d5f8a;
+  background:linear-gradient(180deg,#164e63,#0e2a3d);
+  border-color:var(--cian-sordo);
 }
-#conversar.viva{background:linear-gradient(180deg,#7fd4ff,#3ba9dd);
-                color:#04202f;border-color:#9fe0ff}
+#conversar.viva{background:linear-gradient(180deg,#a5f3fc,#22d3ee);
+                color:#04202f;border-color:#cffafe}
 #aviso{
   color:var(--rojo); font-size:13px; padding:0 18px 8px; min-height:0;
 }
@@ -136,7 +191,7 @@ footer{
    gente hablando, y un «sí» suelto no puede mandarle un correo a nadie. */
 #tarjeta{
   margin:12px 16px; padding:14px 16px; border-radius:16px;
-  background:var(--carta); border:1px solid #2c4f74; display:none;
+  background:var(--carta); border:1px solid var(--borde); display:none;
 }
 #tarjeta.abierta{display:block}
 #tarjeta h3{margin:0 0 4px;font-size:14px;color:var(--ani);font-weight:600}
@@ -147,7 +202,7 @@ footer{
 #tarjeta .campo{color:var(--tenue);font-size:12.5px}
 #tarjeta .botones{display:flex;gap:10px}
 #tarjeta .botones button{flex:1}
-#enviar{background:linear-gradient(180deg,#1c7a4a,#125536);border-color:#2a9c61;
+#enviar{background:linear-gradient(180deg,#15795c,#0d4d3a);border-color:var(--verde);
         font-weight:600}
 #cancelar{color:var(--tenue)}
 
@@ -194,65 +249,63 @@ input{
 <!-- El núcleo del panel del computador. Los anillos giran con animaciones
      de CSS, que las mueve la tarjeta gráfica y no cuestan casi nada; el
      único trabajo de JavaScript son las barras de voz de dentro. -->
+<!-- ANI.
+     Once fotogramas apilados; solo uno visible. Cambiar de cara es cambiar
+     opacidades: ni recalcula ni repinta, solo mezcla dos capas ya pintadas.
+     Barato de sobra para un telefono.
+
+     Los gestos van en `principal.js` (GESTOS) y son los mismos que en el
+     panel del computador, que los escribio Juan. Falta el giro de cabeza
+     (17-20): a 340 px no se apreciaria y costaba cuatro fotogramas.
+
+     El anillo que habia aqui esta guardado en
+     respaldos/2026-09-02_antes-del-avatar/app/index.html -->
 <div id="nucleo">
-  <svg viewBox="0 0 400 400" width="100%" height="100%" aria-hidden="true">
+  <div id="figura">
+      <img data-n="1" src="ani/1.webp" alt="">
+      <img data-n="2" src="ani/2.webp" alt="">
+      <img data-n="3" src="ani/3.webp" alt="">
+      <img data-n="4" src="ani/4.webp" alt="" loading="lazy">
+      <img data-n="5" src="ani/5.webp" alt="" loading="lazy">
+      <img data-n="6" src="ani/6.webp" alt="" loading="lazy">
+      <img data-n="7" src="ani/7.webp" alt="" loading="lazy">
+      <img data-n="8" src="ani/8.webp" alt="" loading="lazy">
+      <img data-n="10" src="ani/10.webp" alt="" loading="lazy">
+      <img data-n="12" src="ani/12.webp" alt="" loading="lazy">
+      <img data-n="13" src="ani/13.webp" alt="" loading="lazy">
+  </div>
+  <svg viewBox="0 0 100 118" preserveAspectRatio="none" aria-hidden="true">
     <defs>
-      <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
-        <feGaussianBlur stdDeviation="3.4" result="b"/>
-        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-      </filter>
-      <linearGradient id="barrido" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0%" stop-color="#00e5ff" stop-opacity="0"/>
-        <stop offset="100%" stop-color="#00e5ff" stop-opacity=".4"/>
-      </linearGradient>
-      <radialGradient id="centro">
-        <stop offset="0%" stop-color="#00e5ff" stop-opacity=".18"/>
-        <stop offset="100%" stop-color="#00e5ff" stop-opacity="0"/>
+      <radialGradient id="aniG">
+        <stop offset="0%" stop-color="#22d3ee" stop-opacity=".55"/>
+        <stop offset="70%" stop-color="#a855f7" stop-opacity=".14"/>
+        <stop offset="100%" stop-color="#a855f7" stop-opacity="0"/>
       </radialGradient>
+      <linearGradient id="aniS" x1="0" x2="1" y1="0" y2="0">
+        <stop offset="0%" stop-color="#a5f3fc" stop-opacity="1"/>
+        <stop offset="100%" stop-color="#22d3ee" stop-opacity=".1"/>
+      </linearGradient>
     </defs>
-
-    <circle cx="200" cy="200" r="120" fill="url(#centro)"/>
-    <g class="g-barrido"><path d="M200 200 L200 42 A158 158 0 0 1 312 88 Z"
-       fill="url(#barrido)"/></g>
-    <g class="g-lento" opacity=".85"><circle cx="200" cy="200" r="186" fill="none"
-       stroke="#0891b2" stroke-width="1" stroke-dasharray="2 6" opacity=".6"/></g>
-    <g class="g-lento"><circle cx="200" cy="200" r="172" fill="none" stroke="#00e5ff"
-       stroke-width="2.5" stroke-dasharray="150 40 70 30 110 50"
-       filter="url(#glow)" class="fluye"/></g>
-    <g class="g-medio">
-      <circle cx="200" cy="200" r="154" fill="none" stroke="#ff9500" stroke-width="8"
-              stroke-dasharray="96 340" stroke-linecap="round" filter="url(#glow)"/>
-      <circle cx="200" cy="200" r="154" fill="none" stroke="#ff9500" stroke-width="2"
-              stroke-dasharray="18 34" opacity=".45" class="fluye-i"/></g>
-    <g class="g-lento" opacity=".9"><g stroke="#7df9ff" stroke-width="1.6">
-      <line x1="200" y1="18" x2="200" y2="32"/><line x1="382" y1="200" x2="368" y2="200"/>
-      <line x1="200" y1="382" x2="200" y2="368"/><line x1="18" y1="200" x2="32" y2="200"/>
-    </g></g>
-    <g class="g-rapido"><circle cx="200" cy="200" r="132" fill="none" stroke="#00e5ff"
-       stroke-width="4.5" stroke-dasharray="230 200" stroke-linecap="round"
-       filter="url(#glow)"/></g>
-    <g class="g-medio" opacity=".75"><circle cx="200" cy="200" r="116" fill="none"
-       stroke="#ffd166" stroke-width="1.4" stroke-dasharray="10 22" class="fluye"/></g>
-    <g class="g-rapido">
-      <circle cx="332" cy="200" r="3.4" fill="#ff9500" filter="url(#glow)"/>
-      <circle cx="68" cy="200" r="2.4" fill="#7df9ff" filter="url(#glow)"/></g>
-
-    <circle id="pulso" class="late" cx="200" cy="200" r="78" fill="none"
-            stroke="#00e5ff" stroke-width="1.5" filter="url(#glow)"/>
-    <circle cx="200" cy="200" r="68" fill="rgba(3,8,15,.85)" stroke="#0f2a44"
-            stroke-width="1.5"/>
-    <circle class="brilla" cx="200" cy="200" r="68" fill="none" stroke="#00e5ff"
-            stroke-width="0.8"/>
-    <g id="ondas" fill="#7df9ff" opacity=".95"></g>
-
-    <text x="200" y="192" text-anchor="middle" fill="#7df9ff" font-size="28"
-          letter-spacing="7" filter="url(#glow)">ANI</text>
-    <text x="200" y="206" text-anchor="middle" fill="#4a6f88" font-size="7"
-          letter-spacing="2.4">ADAPTIVE NEURAL INTERFACE</text>
-    <!-- La firma de quien la hizo, igual que en el computador: discreta y
-         debajo del logo. Se ve si se busca y no estorba a quien solo usa. -->
-    <text x="200" y="219" text-anchor="middle" fill="#2c4658" font-size="5.4"
-          letter-spacing="1.6">POR JUAN GUILLERMO CHAVES · INGEOMAS</text>
+    <g class="a-fondo" style="--o:50.5px 44.25px">
+      <circle cx="50.5" cy="44.25" r="45.0" fill="none" stroke="#a855f7"
+        stroke-width=".4" opacity=".34" stroke-dasharray="2 7"/></g>
+    <g class="a-lento" style="--o:50.5px 44.25px">
+      <circle cx="50.5" cy="44.25" r="35.0" fill="none" stroke="#22d3ee"
+        stroke-width="1" opacity=".9" stroke-dasharray="30 10 5 46"
+        stroke-linecap="round"/></g>
+    <g class="a-medio" style="--o:50.5px 44.25px">
+      <circle cx="50.5" cy="44.25" r="39.5" fill="none" stroke="#a855f7"
+        stroke-width=".8" opacity=".78" stroke-dasharray="4 18 34 8"
+        stroke-linecap="round"/></g>
+    <g class="a-barre" style="--o:50.5px 44.25px">
+      <circle cx="50.5" cy="44.25" r="37.2" fill="none" stroke="url(#aniS)"
+        stroke-width="1.7" stroke-dasharray="17 220"
+        stroke-linecap="round"/></g>
+    <g class="a-emisor" style="--e:50.0px 113.28px">
+      <ellipse cx="50.0" cy="113.28" rx="15.0" ry="4.5"
+        fill="url(#aniG)"/></g>
+    <ellipse id="brilloVoz" cx="50.5" cy="44.25" rx="37.8"
+      ry="41.3" fill="url(#aniG)" opacity=".16"/>
   </svg>
 </div>
 
